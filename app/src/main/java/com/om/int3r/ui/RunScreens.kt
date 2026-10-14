@@ -74,6 +74,7 @@ import com.om.int3r.workout.formatDuration
 import com.om.int3r.workout.formatPace
 import kotlinx.coroutines.delay
 import java.time.LocalDate
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /** A dot that breathes while waiting, and settles green when the sensor is ready. */
@@ -182,10 +183,12 @@ fun RunScreen(run: RunUiState, ambient: Boolean) {
             .fillMaxSize()
             .background(Color.Black)
             .drawBehind {
-                if (tint.alpha > 0f) {
+                // Only the countdown page (1) glows; the tint fades out as you swipe to other pages.
+                val onCountdown = (1f - abs(pager.currentPage + pager.currentPageOffsetFraction - 1f)).coerceIn(0f, 1f)
+                if (tint.alpha > 0f && onCountdown > 0f) {
                     drawRect(
                         Brush.radialGradient(
-                            listOf(tint.copy(alpha = tint.alpha * 0.5f * inhale), Color.Transparent),
+                            listOf(tint.copy(alpha = tint.alpha * 0.5f * inhale * onCountdown), Color.Transparent),
                             center = Offset(size.width / 2, size.height * 0.45f),
                             radius = size.minDimension * (0.5f + 0.18f * inhale),
                         ),
@@ -207,16 +210,13 @@ fun RunScreen(run: RunUiState, ambient: Boolean) {
     }
 }
 
-/** One live metric: name and current value above a graph that scrolls with time. */
+/** One live metric as two lines: name and current value, then a graph that scrolls with time. */
 @Composable
-private fun LiveRow(label: String, value: String, unit: String, color: Color, values: List<Float?>, chartHeight: androidx.compose.ui.unit.Dp, invert: Boolean = false, minSpan: Float) {
-    Column(Modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = Palette.Secondary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(bottom = 1.dp))
-            Text(value, style = MaterialTheme.typography.labelLarge, color = color, maxLines = 1, softWrap = false)
-            Text(" $unit", style = MaterialTheme.typography.labelSmall, color = Palette.Secondary, maxLines = 1, softWrap = false, modifier = Modifier.padding(bottom = 1.dp))
-        }
-        LiveChart(values, color, Modifier.fillMaxWidth().height(chartHeight).padding(top = 2.dp), invert = invert, minSpan = minSpan)
+private fun LiveHeader(label: String, value: String, unit: String, color: Color) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+        Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = Palette.Secondary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(bottom = 1.dp))
+        Text(value, style = MaterialTheme.typography.labelLarge, color = color, maxLines = 1, softWrap = false)
+        Text(" $unit", style = MaterialTheme.typography.labelSmall, color = Palette.Secondary, maxLines = 1, softWrap = false, modifier = Modifier.padding(bottom = 1.dp))
     }
 }
 
@@ -225,18 +225,19 @@ private fun LivePage(run: RunUiState) {
     val size = screenSize()
     val small = size == ScreenSize.SMALL
     val chart = when (size) {
-        ScreenSize.SMALL -> 20.dp
-        ScreenSize.REGULAR -> 28.dp
-        ScreenSize.LARGE -> 34.dp
+        ScreenSize.SMALL -> 18.dp
+        ScreenSize.REGULAR -> 24.dp
+        ScreenSize.LARGE -> 28.dp
     }
-    Column(
-        // Round screens are narrowest at the top and bottom rows; inset more there on small watches.
-        modifier = Modifier.fillMaxSize().padding(horizontal = if (small) 34.dp else 30.dp, vertical = if (small) 30.dp else 32.dp),
-        verticalArrangement = Arrangement.spacedBy(if (small) 2.dp else 4.dp, Alignment.CenterVertically),
-    ) {
-        LiveRow(if (small) "HR" else "Heart rate", run.heartRate?.toString() ?: "--", "bpm", Palette.Heart, run.hrTrail.map { it.toFloat() }, chart, minSpan = 12f)
-        LiveRow("Pace", paceText(run.paceSecPerKm), "/km", Palette.PaceMetric, run.paceTrail, chart, invert = true, minSpan = 30f)
-        LiveRow(if (small) "Cad" else "Cadence", run.cadence?.toString() ?: "--", "spm", Palette.Cadence, run.cadenceTrail.map { it.toFloat() }, chart, minSpan = 10f)
+    val chartModifier = Modifier.fillMaxWidth().height(chart)
+    // Each line is sized to the width the round screen allows at its height, inside the ring.
+    RoundColumn(Modifier.fillMaxSize(), spacing = if (small) 2.dp else 3.dp, edgeInset = 16.dp) {
+        LiveHeader("HR", run.heartRate?.toString() ?: "--", "bpm", Palette.Heart)
+        LiveChart(run.hrTrail.map { it.toFloat() }, Palette.Heart, chartModifier, minSpan = 12f)
+        LiveHeader("Pace", paceText(run.paceSecPerKm), "/km", Palette.PaceMetric)
+        LiveChart(run.paceTrail, Palette.PaceMetric, chartModifier, invert = true, minSpan = 30f)
+        LiveHeader(if (small) "Cad" else "Cadence", run.cadence?.toString() ?: "--", "spm", Palette.Cadence)
+        LiveChart(run.cadenceTrail.map { it.toFloat() }, Palette.Cadence, chartModifier, minSpan = 10f)
     }
 }
 
@@ -264,12 +265,8 @@ private fun SegmentPage(run: RunUiState) {
     )
     // Galaxy Watch 4 40 mm is about 198 dp across; give the big countdown a smaller face there.
     val compact = LocalConfiguration.current.screenWidthDp < 215
-    Column(
-        modifier = Modifier.fillMaxSize().padding(start = 22.dp, end = 22.dp, top = 22.dp, bottom = 26.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        AnimatedContent(
+    RoundColumn(Modifier.fillMaxSize(), spacing = 0.dp, edgeInset = 16.dp) {
+        Centered { AnimatedContent(
             targetState = if (run.workoutComplete) "Workout complete" else run.segmentLabel ?: "",
             transitionSpec = {
                 (slideInVertically(tween(350)) { it } + fadeIn(tween(350)) + scaleIn(initialScale = 0.9f))
@@ -277,8 +274,8 @@ private fun SegmentPage(run: RunUiState) {
             },
             label = "segment",
         ) { label ->
-            Text(label, color = if (run.workoutComplete) Palette.Green else color, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
+            FitText(label, MaterialTheme.typography.titleMedium, if (run.workoutComplete) Palette.Green else color, Modifier.fillMaxWidth(), minSize = 11.sp)
+        } }
         val roundText = when {
             run.phase == Phase.PAUSED -> "Paused"
             run.phase == Phase.ENDING -> "Saving…"
@@ -288,15 +285,19 @@ private fun SegmentPage(run: RunUiState) {
             run.totalSegments != null -> "Step ${run.segmentNumber} of ${run.totalSegments}"
             else -> ""
         }
-        Text(roundText, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        RollingText(
-            remainingText(run),
-            style = if (compact) MaterialTheme.typography.numeralMedium else MaterialTheme.typography.numeralLarge,
-            color = Color.White,
-        )
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(paceText(run.paceSecPerKm), style = MaterialTheme.typography.numeralExtraSmall, color = paceColor)
-            Text(" /km", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 3.dp))
+        Centered { Text(roundText, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1) }
+        Centered {
+            RollingText(
+                remainingText(run),
+                style = if (compact) MaterialTheme.typography.numeralMedium else MaterialTheme.typography.numeralLarge,
+                color = Color.White,
+            )
+        }
+        Centered {
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(paceText(run.paceSecPerKm), style = MaterialTheme.typography.numeralExtraSmall, color = paceColor)
+                Text(" /km", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(bottom = 3.dp))
+            }
         }
         val verdict = run.verdict
         val hint = when {
@@ -306,42 +307,52 @@ private fun SegmentPage(run: RunUiState) {
             run.band != null && !compact -> "target ${run.band}"
             else -> ""
         }
-        AnimatedVisibility(visible = hint.isNotEmpty(), enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
-            AnimatedContent(targetState = hint, transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(300)) }, label = "hint") { h ->
-                Text(h, style = MaterialTheme.typography.labelSmall, color = if (verdict != null) paceColor else MaterialTheme.colorScheme.onSurfaceVariant)
+        if (hint.isNotEmpty()) {
+            Centered {
+                AnimatedContent(targetState = hint, transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(300)) }, label = "hint") { h ->
+                    Text(h, style = MaterialTheme.typography.labelSmall, color = if (verdict != null) paceColor else MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                }
             }
         }
-        Text("♥ ${run.heartRate ?: "--"}   ${formatDistance(run.meters)}", style = MaterialTheme.typography.labelMedium)
+        Centered { Text("♥ ${run.heartRate ?: "--"}   ${formatDistance(run.meters)}", style = MaterialTheme.typography.labelMedium, maxLines = 1) }
         run.nextLabel?.takeIf { !run.workoutComplete }?.let {
-            Text("Next  $it", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Centered { FitText("Next  $it", MaterialTheme.typography.labelSmall, MaterialTheme.colorScheme.onSurfaceVariant, Modifier.fillMaxWidth(), minSize = 8.sp) }
         }
     }
 }
 
 @Composable
+private fun Centered(content: @Composable () -> Unit) =
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { content() }
+
+@Composable
 private fun TotalsPage(run: RunUiState) {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        RollingText(formatDuration(run.activeMs / 1000), style = MaterialTheme.typography.numeralMedium, color = Palette.Yellow, rollDown = false)
-        Text(formatDistance(run.meters), style = MaterialTheme.typography.titleMedium, color = Palette.Accent)
-        Text("avg ${run.avgPaceSecPerKm?.let { formatPace(it) } ?: "-:--"} /km", style = MaterialTheme.typography.labelMedium, color = Palette.Cyan)
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
-            Text("♥ ${run.heartRate ?: "--"} ", style = MaterialTheme.typography.labelMedium, color = Palette.Red)
-            if (run.hrTrail.size >= 2) Sparkline(run.hrTrail, Palette.Red, Modifier.width(70.dp).height(18.dp))
+    RoundColumn(Modifier.fillMaxSize(), spacing = 2.dp, edgeInset = 16.dp) {
+        Centered { RollingText(formatDuration(run.activeMs / 1000), style = MaterialTheme.typography.numeralMedium, color = Palette.Yellow, rollDown = false) }
+        Centered { Text(formatDistance(run.meters), style = MaterialTheme.typography.titleMedium, color = Palette.Accent) }
+        Centered { Text("avg ${run.avgPaceSecPerKm?.let { formatPace(it) } ?: "-:--"} /km", style = MaterialTheme.typography.labelMedium, color = Palette.Cyan, maxLines = 1) }
+        Centered {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+                Text("♥ ${run.heartRate ?: "--"} ", style = MaterialTheme.typography.labelMedium, color = Palette.Red)
+                if (run.hrTrail.size >= 2) Sparkline(run.hrTrail, Palette.Red, Modifier.width(64.dp).height(18.dp))
+            }
         }
-        Text(
-            listOfNotNull(run.altitude?.let { "${it.roundToInt()} m" }, run.elevationGain?.let { "▲ ${it.roundToInt()} m" }).joinToString("   ").ifEmpty { "alt --" },
-            style = MaterialTheme.typography.labelSmall,
-            color = Palette.Purple,
-        )
-        Text(
-            listOfNotNull(run.cadence?.let { "$it spm" }, run.calories?.let { "${it.roundToInt()} kcal" }).joinToString("   ").ifEmpty { "cadence --" },
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Centered {
+            Text(
+                listOfNotNull(run.altitude?.let { "${it.roundToInt()} m" }, run.elevationGain?.let { "▲ ${it.roundToInt()} m" }).joinToString("   ").ifEmpty { "alt --" },
+                style = MaterialTheme.typography.labelSmall,
+                color = Palette.Purple,
+                maxLines = 1,
+            )
+        }
+        Centered {
+            Text(
+                listOfNotNull(run.cadence?.let { "$it spm" }, run.calories?.let { "${it.roundToInt()} kcal" }).joinToString("   ").ifEmpty { "cadence --" },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+        }
     }
 }
 

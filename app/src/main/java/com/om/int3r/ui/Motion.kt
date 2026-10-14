@@ -21,6 +21,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.sp
 import androidx.wear.compose.material3.Text
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -78,4 +79,25 @@ fun rememberCountUp(target: Float, durationMs: Int = 900): Float {
     val anim = remember { Animatable(0f) }
     LaunchedEffect(target) { anim.animateTo(target, tween(durationMs, easing = FastOutSlowInEasing)) }
     return anim.value
+}
+/**
+ * One line of text that shrinks (down to [minSize]) rather than truncating, for the narrow
+ * top and bottom lines of a round screen.
+ */
+@Composable
+fun FitText(
+    text: String,
+    style: TextStyle,
+    color: Color,
+    modifier: Modifier = Modifier,
+    minSize: androidx.compose.ui.unit.TextUnit = 10.sp,
+) {
+    androidx.compose.foundation.text.BasicText(
+        text = text,
+        modifier = modifier,
+        style = style.copy(color = color, textAlign = androidx.compose.ui.text.style.TextAlign.Center),
+        maxLines = 1,
+        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = minSize, maxFontSize = style.fontSize, stepSize = 0.5.sp),
+    )
 }
