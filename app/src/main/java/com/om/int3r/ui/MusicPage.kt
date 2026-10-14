@@ -135,7 +135,7 @@ fun MusicPage(isCurrent: Boolean) {
             textAlign = TextAlign.Center,
         )
         Text(
-            now.artist ?: if (now.canSeeTrack) "Start music on your phone" else "Song names need notification access",
+            now.artist ?: if (now.canSeeTrack) "Start music on your phone" else "Song names: one-time setup, see Settings",
             style = MaterialTheme.typography.labelSmall,
             color = Palette.Secondary,
             maxLines = 1,

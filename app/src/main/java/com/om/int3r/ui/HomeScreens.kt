@@ -319,6 +319,9 @@ fun SettingsScreen() {
                 modifier = Modifier.fillMaxWidth(),
             )
         }
+        header("Song names")
+        paragraph("Music controls work right away. To also see the song and artist, run this once from a PC with the watch connected:")
+        paragraph("adb shell cmd notification allow_listener com.om.int3r/com.om.int3r.music.MediaListener", Palette.Secondary)
         header("While running")
         item { LegendRow(Palette.Green, "On pace") }
         item { LegendRow(Palette.Blue, "Too fast") }

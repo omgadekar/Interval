@@ -137,6 +137,9 @@ fun ListScreen(
             state = state,
             contentPadding = padding,
             modifier = Modifier.fillMaxSize(),
+            // Wear lists centre their second item by default, which leaves a gap above the title.
+            // Start at the top like a normal page.
+            autoCentering = null,
             content = content,
         )
     }

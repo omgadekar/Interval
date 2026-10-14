@@ -35,6 +35,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.wear.ongoing.OngoingActivity
 import androidx.wear.ongoing.Status
 import com.om.int3r.MainActivity
+import com.om.int3r.Permissions
 import com.om.int3r.R
 import com.om.int3r.data.LibraryStore
 import com.om.int3r.data.Prefs
@@ -550,7 +551,7 @@ class ExerciseService : LifecycleService() {
     private fun permitted(type: DataType<*, *>): Boolean {
         val perm = when (type) {
             DataType.LOCATION -> Manifest.permission.ACCESS_FINE_LOCATION
-            DataType.HEART_RATE_BPM -> Manifest.permission.BODY_SENSORS
+            DataType.HEART_RATE_BPM -> Permissions.HEART_RATE
             else -> Manifest.permission.ACTIVITY_RECOGNITION
         }
         return ContextCompat.checkSelfPermission(this, perm) == PackageManager.PERMISSION_GRANTED

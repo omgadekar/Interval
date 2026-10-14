@@ -1,8 +1,6 @@
 package com.om.int3r
 
-import android.Manifest
 import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -31,21 +29,18 @@ class MainActivity : ComponentActivity() {
     )
 
     private val permissionRequest =
-        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { refreshPermissions() }
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
+            // Trust the dialog's answer straight away; the system's own state can lag a moment behind.
+            permissionsGranted.value = requiredPermissions.all { results[it] == true || isGranted(it) }
+        }
 
-    private val requiredPermissions: Array<String>
-        get() = buildList {
-            add(Manifest.permission.ACCESS_FINE_LOCATION)
-            add(Manifest.permission.ACCESS_COARSE_LOCATION)
-            add(Manifest.permission.BODY_SENSORS)
-            add(Manifest.permission.ACTIVITY_RECOGNITION)
-            if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
-        }.toTypedArray()
+    private fun isGranted(permission: String) =
+        ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+
+    private val requiredPermissions: Array<String> get() = Permissions.REQUIRED
 
     private fun refreshPermissions() {
-        permissionsGranted.value = requiredPermissions.all {
-            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
-        }
+        permissionsGranted.value = requiredPermissions.all(::isGranted)
     }
 
     fun requestPermissions() = permissionRequest.launch(requiredPermissions)

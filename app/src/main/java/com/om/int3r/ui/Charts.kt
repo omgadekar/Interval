@@ -198,14 +198,18 @@ fun LiveChart(
         phase.snapTo(0f)
         phase.animateTo(1f, tween(980, easing = LinearEasing))
     }
-    val visible = values.takeLast(window + 1)
+    // Early in a run there are only a few seconds of data: zoom in so the line spans the card,
+    // then ease out to the full window as the minutes add up.
+    val span = (values.size - 1).coerceIn(10, window)
+    val windowF by animateFloatAsState(span.toFloat(), tween(900), label = "window")
+    val visible = values.takeLast(span + 1)
     val present = visible.filterNotNull()
     val rawMin = present.minOrNull() ?: 0f
     val rawMax = present.maxOrNull() ?: 0f
     val mid = (rawMin + rawMax) / 2
-    val span = maxOf(rawMax - rawMin, minSpan)
-    val low by animateFloatAsState(mid - span / 2, tween(900), label = "low")
-    val high by animateFloatAsState(mid + span / 2, tween(900), label = "high")
+    val range0 = maxOf(rawMax - rawMin, minSpan)
+    val low by animateFloatAsState(mid - range0 / 2, tween(900), label = "low")
+    val high by animateFloatAsState(mid + range0 / 2, tween(900), label = "high")
     Canvas(modifier) {
         val stroke = 2.5.dp.toPx()
         val baseY = size.height - stroke
@@ -213,7 +217,7 @@ fun LiveChart(
             drawLine(color.copy(alpha = 0.25f), Offset(0f, size.height / 2), Offset(size.width, size.height / 2), strokeWidth = stroke, cap = StrokeCap.Round)
             return@Canvas
         }
-        val step = size.width / window
+        val step = size.width / windowF
         val n = visible.size
         val range = (high - low).coerceAtLeast(0.001f)
         val pad = size.height * 0.12f
