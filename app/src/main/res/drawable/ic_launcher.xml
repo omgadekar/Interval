@@ -1,12 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- INT3R logo: lime runner on a black disc. Traced from the brand artwork. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="48dp"
     android:height="48dp"
-    android:viewportWidth="48"
-    android:viewportHeight="48">
+    android:viewportWidth="1020"
+    android:viewportHeight="1020">
     <path
-        android:fillColor="#1B1B1B"
-        android:pathData="M24,0a24,24 0,1 1,0 48a24,24 0,1 1,0 -48z" />
+        android:fillColor="#000000"
+        android:pathData="M510,0 A510,510 0 1,1 510,1020 A510,510 0 1,1 510,0 Z" />
     <path
-        android:fillColor="#E8572F"
-        android:pathData="M12,28h6v8h-6z M21,20h6v16h-6z M30,12h6v24h-6z" />
+        android:fillColor="#CBDB05"
+        android:pathData="M762.4,389.5 L696.4,388.5 L629.4,457.5 L505.4,457.5 L422.4,538.5 L486.4,538.5 L523.4,502.5 L620.4,502.5 L634.4,500.5 L649.4,495.5 L670.4,482.5 Z M641.4,382.5 L471.4,381.5 L455.4,385.5 L436.4,396.5 L339.4,486.5 L338.4,489.5 L402.4,489.5 L470.4,427.5 L599.4,427.5 L641.4,384.5 Z M558.4,563.5 L551.4,556.5 L539.4,551.5 L483.4,551.5 L441.4,596.5 L496.4,597.5 L384.4,712.5 L386.4,712.5 L385.4,714.5 L448.4,713.5 L560.4,599.5 L564.4,589.5 L564.4,576.5 Z M404.4,621.5 L342.4,620.5 L254.4,711.5 L316.4,712.5 Z M637.4,305.5 L606.4,338.5 L606.4,354.5 L612.4,361.5 L619.4,364.5 L659.4,364.5 L687.4,334.5 L690.4,327.5 L689.4,316.5 L686.4,311.5 L679.4,306.5 Z" />
 </vector>

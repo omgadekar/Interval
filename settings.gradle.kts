@@ -12,5 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "Interval"
+rootProject.name = "INT3R"
 include(":app")

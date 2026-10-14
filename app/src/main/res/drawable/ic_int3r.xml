@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- INT3R runner, white on transparent: notification and watch-face workout chip. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="549"
+    android:viewportHeight="549">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M528.3,153.8 L462.3,152.8 L395.3,221.8 L271.3,221.8 L188.3,302.8 L252.3,302.8 L289.3,266.8 L386.3,266.8 L400.3,264.8 L415.3,259.8 L436.3,246.8 Z M407.3,146.8 L237.3,145.8 L221.3,149.8 L202.3,160.8 L105.3,250.8 L104.3,253.8 L168.3,253.8 L236.3,191.8 L365.3,191.8 L407.3,148.8 Z M324.3,327.8 L317.3,320.8 L305.3,315.8 L249.3,315.8 L207.3,360.8 L262.3,361.8 L150.3,476.8 L152.3,476.8 L151.3,478.8 L214.3,477.8 L326.3,363.8 L330.3,353.8 L330.3,340.8 Z M170.3,385.8 L108.3,384.8 L20.3,475.8 L82.3,476.8 Z M403.3,69.8 L372.3,102.8 L372.3,118.8 L378.3,125.8 L385.3,128.8 L425.3,128.8 L453.3,98.8 L456.3,91.8 L455.3,80.8 L452.3,75.8 L445.3,70.8 Z" />
+</vector>

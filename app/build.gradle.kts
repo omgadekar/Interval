@@ -8,11 +8,11 @@ plugins {
 }
 
 android {
-    namespace = "com.om.interval"
+    namespace = "com.om.int3r"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.om.interval"
+        applicationId = "com.om.int3r"
         minSdk = 30
         targetSdk = 35
         versionCode = 1

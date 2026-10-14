@@ -1,6 +1,6 @@
-# Interval
+# INT3R
 
-A Wear OS running app for the Galaxy Watch 4. You build interval workouts on the watch, plan them on any day, and run them with guided wrist cues. Every run is recorded in the background and exported as TCX/GPX.
+INT3R is a Wear OS running app for the Galaxy Watch 4. You build interval workouts on the watch, plan them on any day, and run them with guided wrist cues. Every run is recorded in the background and exported as TCX/GPX.
 
 ## Features
 
@@ -50,7 +50,7 @@ A Wear OS running app for the Galaxy Watch 4. You build interval workouts on the
 
 ## Compatible watches
 
-Interval runs on any watch with **Wear OS 3 or newer** (Android 11 / API 30+), because it records through Google's Health Services. For example:
+INT3R runs on any watch with **Wear OS 3 or newer** (Android 11 / API 30+), because it records through Google's Health Services. For example:
 
 | Brand | Watches |
 |---|---|
@@ -94,7 +94,7 @@ Small watches get compact pickers, run pages and stat rows; large ones get bigge
    ```
 
    Or open the project in Android Studio and press Run.
-5. **Grant permissions.** Open **Interval** on the watch and allow location, physical activity, body sensors and notifications.
+5. **Grant permissions.** Open **INT3R** on the watch and allow location, physical activity, body sensors and notifications.
 
 ## Export a run to your phone
 
@@ -110,12 +110,12 @@ Sharing stops when you leave the screen or after 10 minutes. The link contains a
 The Music page controls your phone's player straight away. To also show the song and artist, the app needs notification access. Watches often have no settings screen for this, so grant it once from the PC with the watch connected:
 
 ```
-adb shell cmd notification allow_listener com.om.interval/com.om.interval.music.MediaListener
+adb shell cmd notification allow_listener com.om.int3r/com.om.int3r.music.MediaListener
 ```
 
 ## Getting runs off the watch over ADB
 
-Every run is saved to `/sdcard/Android/data/com.om.interval/files/runs/` as four files:
+Every run is saved to `/sdcard/Android/data/com.om.int3r/files/runs/` as four files:
 
 | File | Contents |
 |---|---|
