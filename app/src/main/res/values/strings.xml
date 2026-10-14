@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Interval</string>
+    <string name="tile_label">Today\'s run</string>
+    <string name="channel_name">Workout in progress</string>
+</resources>
