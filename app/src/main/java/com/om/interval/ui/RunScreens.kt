@@ -5,6 +5,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -34,9 +35,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
@@ -91,9 +95,12 @@ fun PreRunScreen(workoutId: String, date: LocalDate?, run: RunUiState, permissio
         (Edit.innerSteps(b) ?: listOfNotNull(b as? com.om.interval.workout.Step)).any { it.target is PaceTarget.Goal }
     }
 
+    // Warm up the sensors once per visit; coming back to this screen after a run must not start another.
+    var prepared by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(workoutId, permissionsGranted) {
-        if (permissionsGranted && RunSession.state.value.phase == Phase.IDLE) {
+        if (!prepared && permissionsGranted && RunSession.state.value.phase == Phase.IDLE) {
             ExerciseService.send(context, ExerciseService.ACTION_PREPARE, workoutId, date?.toString())
+            prepared = true
         }
     }
     DisposableEffect(workoutId) {
@@ -125,6 +132,7 @@ fun PreRunScreen(workoutId: String, date: LocalDate?, run: RunUiState, permissio
             item {
                 Button(
                     onClick = { ExerciseService.send(context, ExerciseService.ACTION_START) },
+                    colors = Buttons.go(),
                     enabled = run.phase == Phase.PREPARING,
                     label = {
                         Text(if (run.gpsReady) "Start" else "Start without GPS", Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
@@ -151,6 +159,13 @@ fun RunScreen(run: RunUiState, ambient: Boolean) {
         tween(900),
         label = "tint",
     )
+    // The tint breathes slowly (about 4.8 s per breath) so it reads as alive, never as a flash.
+    val breath = rememberInfiniteTransition(label = "breath")
+    val inhale by breath.animateFloat(
+        0.55f, 1f,
+        infiniteRepeatable(tween(2400, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "inhale",
+    )
     val ringColor by animateColorAsState(
         when {
             run.workoutComplete -> Palette.Green
@@ -160,22 +175,68 @@ fun RunScreen(run: RunUiState, ambient: Boolean) {
         tween(600),
         label = "ring",
     )
-    val pager = rememberPagerState(pageCount = { 3 })
+    // Controls sit one swipe to the right of the workout, as on Apple Watch.
+    val pager = rememberPagerState(initialPage = 1, pageCount = { 5 })
     Box(
         Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .background(Brush.radialGradient(listOf(tint.copy(alpha = tint.alpha * 0.42f), Color.Transparent))),
+            .drawBehind {
+                if (tint.alpha > 0f) {
+                    drawRect(
+                        Brush.radialGradient(
+                            listOf(tint.copy(alpha = tint.alpha * 0.5f * inhale), Color.Transparent),
+                            center = Offset(size.width / 2, size.height * 0.45f),
+                            radius = size.minDimension * (0.5f + 0.18f * inhale),
+                        ),
+                    )
+                }
+            },
     ) {
         EdgeRing(run.segmentProgress, run.segmentNumber, ringColor, Modifier.fillMaxSize())
         HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { page ->
             when (page) {
-                0 -> SegmentPage(run)
-                1 -> TotalsPage(run)
-                else -> ControlsPage(run)
+                0 -> ControlsPage(run)
+                1 -> SegmentPage(run)
+                2 -> LivePage(run)
+                3 -> TotalsPage(run)
+                else -> MusicPage(isCurrent = pager.currentPage == 4)
             }
         }
         HorizontalPageIndicator(pagerState = pager, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp))
+    }
+}
+
+/** One live metric: name and current value above a graph that scrolls with time. */
+@Composable
+private fun LiveRow(label: String, value: String, unit: String, color: Color, values: List<Float?>, chartHeight: androidx.compose.ui.unit.Dp, invert: Boolean = false, minSpan: Float) {
+    Column(Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = Palette.Secondary, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(bottom = 1.dp))
+            Text(value, style = MaterialTheme.typography.labelLarge, color = color, maxLines = 1, softWrap = false)
+            Text(" $unit", style = MaterialTheme.typography.labelSmall, color = Palette.Secondary, maxLines = 1, softWrap = false, modifier = Modifier.padding(bottom = 1.dp))
+        }
+        LiveChart(values, color, Modifier.fillMaxWidth().height(chartHeight).padding(top = 2.dp), invert = invert, minSpan = minSpan)
+    }
+}
+
+@Composable
+private fun LivePage(run: RunUiState) {
+    val size = screenSize()
+    val small = size == ScreenSize.SMALL
+    val chart = when (size) {
+        ScreenSize.SMALL -> 20.dp
+        ScreenSize.REGULAR -> 28.dp
+        ScreenSize.LARGE -> 34.dp
+    }
+    Column(
+        // Round screens are narrowest at the top and bottom rows; inset more there on small watches.
+        modifier = Modifier.fillMaxSize().padding(horizontal = if (small) 34.dp else 30.dp, vertical = if (small) 30.dp else 32.dp),
+        verticalArrangement = Arrangement.spacedBy(if (small) 2.dp else 4.dp, Alignment.CenterVertically),
+    ) {
+        LiveRow(if (small) "HR" else "Heart rate", run.heartRate?.toString() ?: "--", "bpm", Palette.Heart, run.hrTrail.map { it.toFloat() }, chart, minSpan = 12f)
+        LiveRow("Pace", paceText(run.paceSecPerKm), "/km", Palette.PaceMetric, run.paceTrail, chart, invert = true, minSpan = 30f)
+        LiveRow(if (small) "Cad" else "Cadence", run.cadence?.toString() ?: "--", "spm", Palette.Cadence, run.cadenceTrail.map { it.toFloat() }, chart, minSpan = 10f)
     }
 }
 
@@ -294,7 +355,7 @@ private fun ControlsPage(run: RunUiState) {
             confirmEnd = false
         }
     }
-    val endColor by animateColorAsState(if (confirmEnd) Palette.Red else Palette.Accent, tween(250), label = "end")
+    val endColor by animateColorAsState(if (confirmEnd) Palette.Red else Palette.Red.copy(alpha = 0.85f), tween(250), label = "end")
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 26.dp, vertical = 30.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -303,8 +364,9 @@ private fun ControlsPage(run: RunUiState) {
         val paused = run.phase == Phase.PAUSED
         Text(formatDuration(run.activeMs / 1000), style = MaterialTheme.typography.titleMedium, color = Palette.Yellow)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            FilledTonalButton(
+            Button(
                 onClick = { ExerciseService.send(context, if (paused) ExerciseService.ACTION_RESUME else ExerciseService.ACTION_PAUSE) },
+                colors = if (paused) Buttons.go() else Buttons.secondary(),
                 enabled = run.phase == Phase.ACTIVE || paused,
                 label = { Text(if (paused) "Resume" else "Pause", Modifier.fillMaxWidth(), textAlign = TextAlign.Center, maxLines = 1) },
                 modifier = Modifier.weight(1f),
@@ -321,7 +383,7 @@ private fun ControlsPage(run: RunUiState) {
         Button(
             onClick = { if (confirmEnd) ExerciseService.send(context, ExerciseService.ACTION_END) else confirmEnd = true },
             enabled = run.phase != Phase.ENDING,
-            colors = ButtonDefaults.buttonColors(containerColor = endColor),
+            colors = ButtonDefaults.buttonColors(containerColor = endColor, contentColor = Color.White),
             label = { Text(if (confirmEnd) "Tap to end" else "End", Modifier.fillMaxWidth(), textAlign = TextAlign.Center) },
             modifier = Modifier.fillMaxWidth(),
         )

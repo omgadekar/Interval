@@ -47,6 +47,9 @@ data class RunUiState(
     val paceStatus: PaceStatus = PaceStatus.NONE,
     /** Heart rate once per second, most recent last. */
     val hrTrail: List<Int> = emptyList(),
+    /** Smoothed pace (s/km) once per second; null while standing. */
+    val paceTrail: List<Float?> = emptyList(),
+    val cadenceTrail: List<Int> = emptyList(),
     val summaryId: String? = null,
     val error: String? = null,
 ) {

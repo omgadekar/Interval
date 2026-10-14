@@ -17,6 +17,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.TextStyle
@@ -57,6 +58,8 @@ fun RollingText(
             androidx.compose.runtime.key(text.length - i) {
                 AnimatedContent(
                     targetState = ch,
+                    // Clip to the digit's own window, like an odometer, so rolling digits never overlap other text.
+                    modifier = Modifier.clipToBounds(),
                     transitionSpec = {
                         val dir = if (rollDown) -1 else 1
                         (slideInVertically(tween(260)) { h -> dir * h } + fadeIn(tween(220)))

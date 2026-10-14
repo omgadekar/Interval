@@ -302,7 +302,7 @@ fun StepScreen(id: String, path: StepPath, back: () -> Unit) {
         item {
             Button(
                 onClick = { edit { Edit.removeStep(it, path) }; back() },
-                colors = ButtonDefaults.buttonColors(containerColor = Palette.Red.copy(alpha = 0.85f), contentColor = androidx.compose.ui.graphics.Color.White),
+                colors = Buttons.destructive(false),
                 label = { Text("Delete step") },
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -445,7 +445,7 @@ fun BlockScreen(id: String, index: Int, open: (String) -> Unit, back: () -> Unit
         item {
             Button(
                 onClick = { edit { Edit.remove(it, index) }; back() },
-                colors = ButtonDefaults.buttonColors(containerColor = Palette.Red.copy(alpha = 0.85f), contentColor = androidx.compose.ui.graphics.Color.White),
+                colors = Buttons.destructive(false),
                 label = { Text("Delete repeat") },
                 modifier = Modifier.fillMaxWidth(),
                 contentPadding = PaddingValues(horizontal = 14.dp),

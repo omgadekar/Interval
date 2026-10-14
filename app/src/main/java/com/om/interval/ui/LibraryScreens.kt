@@ -131,6 +131,7 @@ fun WorkoutScreen(id: String, date: LocalDate?, open: (String) -> Unit, back: ()
         item {
             Button(
                 onClick = { open(Routes.prerun(id, date)) },
+                colors = Buttons.go(),
                 enabled = w.workout.blocks.isNotEmpty(),
                 label = { Text("Start", Modifier.fillMaxWidth(), textAlign = TextAlign.Center) },
                 modifier = Modifier.fillMaxWidth().appear(1),
@@ -164,10 +165,7 @@ fun WorkoutScreen(id: String, date: LocalDate?, open: (String) -> Unit, back: ()
                         confirmDelete = true
                     }
                 },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (confirmDelete) Palette.Red else Palette.SurfaceHigh,
-                    contentColor = if (confirmDelete) Color.White else Palette.Red,
-                ),
+                colors = Buttons.destructive(confirmDelete),
                 label = { Text(if (confirmDelete) "Tap again to delete" else "Delete") },
                 modifier = Modifier.fillMaxWidth(),
             )

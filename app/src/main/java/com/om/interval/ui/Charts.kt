@@ -5,6 +5,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Column
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -175,5 +177,74 @@ fun EdgeRing(progress: Float, segment: Int, color: Color, modifier: Modifier = M
         val arcSize = Size(size.width - inset * 2, size.height - inset * 2)
         drawArc(Palette.Track, -90f, 360f, false, Offset(inset, inset), arcSize, style = Stroke(stroke))
         drawArc(color, -90f, 360f * anim.value, false, Offset(inset, inset), arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
+    }
+}
+/**
+ * A live graph that glides left as each new second arrives, like a heart monitor. The newest
+ * point slides in from the right edge with a soft glow; the scale eases rather than jumping.
+ * [window] is how many seconds are visible.
+ */
+@Composable
+fun LiveChart(
+    values: List<Float?>,
+    color: Color,
+    modifier: Modifier = Modifier,
+    invert: Boolean = false,
+    window: Int = 90,
+    minSpan: Float = 10f,
+) {
+    val phase = remember { Animatable(1f) }
+    LaunchedEffect(values) {
+        phase.snapTo(0f)
+        phase.animateTo(1f, tween(980, easing = LinearEasing))
+    }
+    val visible = values.takeLast(window + 1)
+    val present = visible.filterNotNull()
+    val rawMin = present.minOrNull() ?: 0f
+    val rawMax = present.maxOrNull() ?: 0f
+    val mid = (rawMin + rawMax) / 2
+    val span = maxOf(rawMax - rawMin, minSpan)
+    val low by animateFloatAsState(mid - span / 2, tween(900), label = "low")
+    val high by animateFloatAsState(mid + span / 2, tween(900), label = "high")
+    Canvas(modifier) {
+        val stroke = 2.5.dp.toPx()
+        val baseY = size.height - stroke
+        if (present.size < 2) {
+            drawLine(color.copy(alpha = 0.25f), Offset(0f, size.height / 2), Offset(size.width, size.height / 2), strokeWidth = stroke, cap = StrokeCap.Round)
+            return@Canvas
+        }
+        val step = size.width / window
+        val n = visible.size
+        val range = (high - low).coerceAtLeast(0.001f)
+        val pad = size.height * 0.12f
+        val points = visible.mapIndexed { i, v ->
+            v?.let {
+                val norm = ((it - low) / range).coerceIn(0f, 1f)
+                val y = pad + (size.height - pad * 2) * (if (invert) norm else 1f - norm)
+                Offset(size.width - (n - 1 - i) * step + (1f - phase.value) * step, y)
+            }
+        }
+        clipRect {
+            var run = mutableListOf<Offset>()
+            fun flush() {
+                if (run.size >= 2) {
+                    val fill = smoothPath(run).apply {
+                        lineTo(run.last().x, baseY)
+                        lineTo(run.first().x, baseY)
+                        close()
+                    }
+                    drawPath(fill, Brush.verticalGradient(listOf(color.copy(alpha = 0.32f), color.copy(alpha = 0f))))
+                }
+                run = mutableListOf()
+            }
+            points.forEach { p -> if (p == null) flush() else run.add(p) }
+            flush()
+            drawPath(smoothPath(points), color, style = Stroke(stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
+        }
+        points.lastOrNull()?.let { p ->
+            val x = p.x.coerceAtMost(size.width - 4.dp.toPx())
+            drawCircle(color.copy(alpha = 0.25f), 6.dp.toPx(), Offset(x, p.y))
+            drawCircle(color, 3.dp.toPx(), Offset(x, p.y))
+        }
     }
 }

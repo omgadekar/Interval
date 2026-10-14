@@ -119,6 +119,7 @@ fun HomeScreen(permissionsGranted: Boolean, onRequestPermissions: () -> Unit, op
             item {
                 Button(
                     onClick = { open(Routes.prerun(planned.id, today)) },
+                    colors = Buttons.go(),
                     label = { Text(if (today.toString() in done) "Run it again" else "Start", Modifier.fillMaxWidth(), textAlign = TextAlign.Center) },
                     modifier = Modifier.fillMaxWidth().appear(3),
                 )
@@ -233,6 +234,7 @@ fun DayScreen(date: LocalDate, open: (String) -> Unit) {
             item {
                 Button(
                     onClick = { open(Routes.prerun(planned.id, date)) },
+                    colors = Buttons.go(),
                     label = { Text("Start", Modifier.fillMaxWidth(), textAlign = TextAlign.Center) },
                     modifier = Modifier.fillMaxWidth().appear(1),
                 )

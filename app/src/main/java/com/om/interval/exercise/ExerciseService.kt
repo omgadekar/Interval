@@ -130,6 +130,8 @@ class ExerciseService : LifecycleService() {
     private var saved: SavedWorkout? = null
     private var plannedDate: String? = null
     private val hrTrail = ArrayDeque<Int>()
+    private val paceTrail = ArrayDeque<Float?>()
+    private val cadenceTrail = ArrayDeque<Int>()
     private var capabilities: ExerciseTypeCapabilities? = null
     private var ongoing: OngoingActivity? = null
     private var wakeLock: PowerManager.WakeLock? = null
@@ -160,6 +162,11 @@ class ExerciseService : LifecycleService() {
     private var lastDistanceAt = 0L
     private var lastSpeed = 0.0
     private var engineMeters = 0.0
+
+    private fun <T> ArrayDeque<T>.push(value: T) {
+        addLast(value)
+        while (size > HR_TRAIL) removeFirst()
+    }
 
     private val bootEpochMs: Long get() = System.currentTimeMillis() - SystemClock.elapsedRealtime()
 
@@ -247,6 +254,8 @@ class ExerciseService : LifecycleService() {
         laps.clear()
         smoother.clear()
         hrTrail.clear()
+        paceTrail.clear()
+        cadenceTrail.clear()
         finishedAtActiveMs = null
         lastVerdict = null
         activeAccumMs = 0
@@ -493,10 +502,9 @@ class ExerciseService : LifecycleService() {
         val pace = smoother.paceSecPerKm()
         val meters = max(lastDistance, engineMeters)
         val band = seg?.step?.let(::coachedBand)
-        state.value.heartRate?.let {
-            hrTrail.addLast(it)
-            while (hrTrail.size > HR_TRAIL) hrTrail.removeFirst()
-        }
+        state.value.heartRate?.let { hrTrail.push(it) }
+        paceTrail.push(pace?.toFloat())
+        state.value.cadence?.let { cadenceTrail.push(it) }
         val progress = when (val end = seg?.step?.end) {
             is End.Time -> snap.elapsedInSegmentMs / (end.seconds * 1000f)
             is End.Distance -> 1f - ((snap.remainingMeters ?: end.meters) / end.meters).toFloat()
@@ -511,6 +519,8 @@ class ExerciseService : LifecycleService() {
                 else -> PaceStatus.ON
             },
             hrTrail = hrTrail.toList(),
+            paceTrail = paceTrail.toList(),
+            cadenceTrail = cadenceTrail.toList(),
             activeMs = nowMs,
             meters = meters,
             paceSecPerKm = pace,

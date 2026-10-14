@@ -62,6 +62,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.guava)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.wear.input)
+    implementation(libs.zxing.core)
 
     testImplementation(libs.junit)
 }

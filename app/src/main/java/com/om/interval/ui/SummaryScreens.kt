@@ -1,6 +1,10 @@
 package com.om.interval.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -43,18 +47,47 @@ import kotlin.math.roundToInt
 
 private val runDate = DateTimeFormatter.ofPattern("EEE d MMM · HH:mm")
 
+/** One metric: a quiet caption over a value in the metric colour, on a faintly tinted tile. */
 @Composable
-private fun Stat(label: String, value: String, modifier: Modifier = Modifier, color: Color = Color.White) {
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, style = MaterialTheme.typography.titleMedium, color = color, maxLines = 1)
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+private fun StatTile(label: String, value: String, unit: String, color: Color, modifier: Modifier = Modifier) {
+    val caption = color.copy(alpha = 0.8f).compositeOver(Color.White.copy(alpha = 0.6f))
+    val tile = modifier
+        .clip(RoundedCornerShape(16.dp))
+        .background(color.copy(alpha = 0.12f).compositeOver(Palette.Surface))
+    val valueWithUnit: @Composable () -> Unit = {
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(value, style = MaterialTheme.typography.numeralExtraSmall, color = color, maxLines = 1, softWrap = false)
+            if (unit.isNotEmpty()) {
+                Text(" $unit", style = MaterialTheme.typography.labelSmall, color = Palette.Secondary, maxLines = 1, softWrap = false, modifier = Modifier.padding(bottom = 2.dp))
+            }
+        }
+    }
+    if (screenSize() == ScreenSize.SMALL) {
+        // Small screens: one stat per row, caption left and value right.
+        Row(tile.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = caption, maxLines = 1, modifier = Modifier.weight(1f))
+            valueWithUnit()
+        }
+    } else {
+        Column(tile.padding(horizontal = 10.dp, vertical = 7.dp)) {
+            Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = caption, maxLines = 1)
+            valueWithUnit()
+        }
     }
 }
 
 @Composable
-private fun StatRow(vararg stats: Triple<String, String, Color>) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 3.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-        stats.forEach { (label, value, color) -> Stat(label, value, Modifier.weight(1f), color) }
+private fun TileRow(left: @Composable (Modifier) -> Unit, right: @Composable (Modifier) -> Unit) {
+    if (screenSize() == ScreenSize.SMALL) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            left(Modifier.fillMaxWidth())
+            right(Modifier.fillMaxWidth())
+        }
+    } else {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            left(Modifier.weight(1f))
+            right(Modifier.weight(1f))
+        }
     }
 }
 
@@ -118,7 +151,7 @@ private fun LapBars(laps: List<LapSummary>) {
 }
 
 @Composable
-fun SummaryScreen(id: String, back: () -> Unit) {
+fun SummaryScreen(id: String, open: (String) -> Unit, back: () -> Unit) {
     val context = LocalContext.current
     val store = remember { RunStore(context) }
     val summary = remember(id) { store.load(id) }
@@ -147,18 +180,24 @@ fun SummaryScreen(id: String, back: () -> Unit) {
         }
         item {
             Column(Modifier.appear(2)) {
-                StatRow(
-                    Triple("time", formatDuration(summary.activeMs / 1000), Color.White),
-                    Triple("avg pace", summary.paceSecPerKm?.let { formatPace(it) } ?: "-", Palette.Cyan),
+                TileRow(
+                    { StatTile("Time", formatDuration(summary.activeMs / 1000), "", Palette.Time, it) },
+                    { StatTile("Pace", summary.paceSecPerKm?.let { formatPace(it) } ?: "--", "/km", Palette.PaceMetric, it) },
                 )
-                StatRow(
-                    Triple("avg ♥", summary.avgHeartRate?.toString() ?: "-", Palette.Red),
-                    Triple("max ♥", summary.maxHeartRate?.toString() ?: "-", Palette.Red),
+                TileRow(
+                    { StatTile("Avg HR", summary.avgHeartRate?.toString() ?: "--", "bpm", Palette.Heart, it) },
+                    { StatTile("Max HR", summary.maxHeartRate?.toString() ?: "--", "bpm", Palette.Heart, it) },
                 )
-                StatRow(
-                    Triple("climb", summary.elevationGain?.let { "${it.roundToInt()} m" } ?: "-", Palette.Purple),
-                    Triple("cadence", summary.avgCadence?.toString() ?: "-", Palette.Green),
+                TileRow(
+                    { StatTile("Climb", summary.elevationGain?.roundToInt()?.toString() ?: "--", "m", Palette.Climb, it) },
+                    { StatTile("Cadence", summary.avgCadence?.toString() ?: "--", "spm", Palette.Cadence, it) },
                 )
+                summary.calories?.let { kcal ->
+                    TileRow(
+                        { StatTile("Energy", kcal.roundToInt().toString(), "kcal", Palette.Energy, it) },
+                        { StatTile("Laps", summary.laps.size.toString(), "", Palette.Secondary, it) },
+                    )
+                }
             }
         }
         val hr = series.map { it.hr?.toFloat() }
@@ -200,7 +239,15 @@ fun SummaryScreen(id: String, back: () -> Unit) {
             item { LapBars(summary.laps) }
             items(summary.laps) { LapRow(it) }
         }
-        paragraph("Saved as $id.tcx / .gpx")
+        item {
+            Button(
+                onClick = { open(Routes.export(id)) },
+                colors = Buttons.primary(),
+                label = { Text("Export") },
+                secondaryLabel = { Text("Send to your phone") },
+                modifier = Modifier.fillMaxWidth().appear(6),
+            )
+        }
         item {
             Button(
                 onClick = {
@@ -211,10 +258,7 @@ fun SummaryScreen(id: String, back: () -> Unit) {
                         confirmDelete = true
                     }
                 },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (confirmDelete) Palette.Red else Palette.SurfaceHigh,
-                    contentColor = if (confirmDelete) Color.White else Palette.Red,
-                ),
+                colors = Buttons.destructive(confirmDelete),
                 label = { Text(if (confirmDelete) "Tap again to delete" else "Delete run") },
                 modifier = Modifier.fillMaxWidth(),
             )

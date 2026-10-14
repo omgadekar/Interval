@@ -12,6 +12,8 @@ import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
 import androidx.wear.compose.foundation.lazy.ScalingLazyListScope
 import androidx.wear.compose.foundation.lazy.ScalingLazyListState
 import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
+import androidx.wear.compose.material3.ButtonColors
+import androidx.wear.compose.material3.ButtonDefaults
 import androidx.wear.compose.material3.ColorScheme
 import androidx.wear.compose.material3.ListHeader
 import androidx.wear.compose.material3.MaterialTheme
@@ -31,10 +33,47 @@ object Palette {
     val Amber = Color(0xFFFF9F0A)
     val Red = Color(0xFFFF375F)
     val Purple = Color(0xFFBF5AF2)
+    val Pink = Color(0xFFFF2D55)
     val Surface = Color(0xFF1C1C1E)
     val SurfaceHigh = Color(0xFF2C2C2E)
     val Track = Color(0xFF2C2C2E)
     val Secondary = Color(0xFF98989F)
+    val Tertiary = Color(0xFF636366)
+
+    // Metric colours, as in Apple's workout summaries.
+    val Time = Yellow
+    val Distance = Accent
+    val PaceMetric = Teal
+    val Heart = Red
+    val Climb = Purple
+    val Cadence = Green
+    val Energy = Pink
+}
+
+/** The three button roles, used everywhere so every screen feels the same. */
+object Buttons {
+    /** Go: start or resume a workout. */
+    @Composable
+    fun go(): ButtonColors = ButtonDefaults.buttonColors(containerColor = Palette.Green, contentColor = Color.Black, secondaryContentColor = Color.Black.copy(alpha = 0.7f))
+
+    /** Main action on a screen. */
+    @Composable
+    fun primary(): ButtonColors = ButtonDefaults.buttonColors(containerColor = Palette.Accent, contentColor = Color.Black, secondaryContentColor = Color.Black.copy(alpha = 0.7f))
+
+    /** Everything else: dark pill, white label, grey detail. */
+    @Composable
+    fun secondary(): ButtonColors = ButtonDefaults.filledTonalButtonColors(
+        containerColor = Palette.Surface,
+        contentColor = Color.White,
+        secondaryContentColor = Palette.Secondary,
+    )
+
+    /** Delete, end: red label until confirmed, then solid red. */
+    @Composable
+    fun destructive(armed: Boolean): ButtonColors = ButtonDefaults.buttonColors(
+        containerColor = if (armed) Palette.Red else Palette.Surface,
+        contentColor = if (armed) Color.White else Palette.Red,
+    )
 }
 
 /** Effort colours run cool to hot, like heart-rate zones. */
@@ -70,6 +109,8 @@ private val colors = ColorScheme(
     onTertiary = Color.Black,
     surfaceContainerLow = Color(0xFF121214),
     surfaceContainer = Palette.Surface,
+    outline = Palette.Tertiary,
+    outlineVariant = Palette.SurfaceHigh,
     surfaceContainerHigh = Palette.SurfaceHigh,
     onSurface = Color.White,
     onSurfaceVariant = Palette.Secondary,
@@ -78,7 +119,7 @@ private val colors = ColorScheme(
 )
 
 @Composable
-fun IntervalTheme(content: @Composable () -> Unit) = MaterialTheme(colorScheme = colors, content = content)
+fun IntervalTheme(content: @Composable () -> Unit) = MaterialTheme(colorScheme = colors, typography = intervalTypography(), content = content)
 
 /** Standard scrolling screen: scaffolded list with bezel scrolling and a scroll indicator. */
 @Composable
