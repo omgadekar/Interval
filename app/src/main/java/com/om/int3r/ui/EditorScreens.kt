@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -21,6 +22,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
+import androidx.wear.compose.material3.EdgeButton
+import androidx.wear.compose.material3.EdgeButtonSize
+import kotlinx.coroutines.delay
 import androidx.wear.compose.material3.Button
 import androidx.wear.compose.material3.ButtonDefaults
 import androidx.wear.compose.material3.CompactButton
@@ -69,8 +75,8 @@ private fun stepDetail(step: Step, goal: Int?): String =
     listOfNotNull(Describe.end(step.end), Describe.target(step.target, goal)).joinToString(" ")
 
 @Composable
-private fun StepRow(step: Step, goal: Int?, indent: Boolean = false, onClick: () -> Unit) {
-    val modifier = Modifier.fillMaxWidth().then(if (indent) Modifier.padding(start = 14.dp) else Modifier)
+private fun StepRow(step: Step, goal: Int?, indent: Boolean = false, flash: Boolean = false, onClick: () -> Unit) {
+    val modifier = Modifier.fillMaxWidth().then(if (indent) Modifier.padding(start = 14.dp) else Modifier).flash(flash)
     val label: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {
         Text(step.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
@@ -92,7 +98,7 @@ private fun blockTitle(block: Block): String = when (block) {
 
 /** The outline of a workout: every block in order, plus buttons to add more. */
 @Composable
-fun EditorScreen(id: String, open: (String) -> Unit, back: () -> Unit) {
+fun EditorScreen(id: String, open: (String) -> Unit, back: () -> Unit, flash: String = "", onFlashShown: () -> Unit = {}) {
     val (saved, edit) = rememberWorkout(id)
     val store = LibraryStore.get(LocalContext.current)
     val goal = goalPace()
@@ -102,8 +108,34 @@ fun EditorScreen(id: String, open: (String) -> Unit, back: () -> Unit) {
     }
     val rename = rememberTextInput { name -> store.update { it.upsert(saved.copy(name = name)) } }
     val w = saved.workout
+    var saving by remember { mutableStateOf(false) }
 
-    ListScreen {
+    // Where each step sits in the list, so a just-added one can be scrolled into view.
+    val rowIndex = remember(w) {
+        buildMap {
+            var i = 3
+            w.blocks.forEachIndexed { b, block ->
+                put(flashKey(b), i++)
+                Edit.innerSteps(block)?.indices?.forEach { j -> put(flashKey(b, j), i++) }
+            }
+        }
+    }
+    val state = rememberScalingLazyListState()
+    LaunchedEffect(flash) {
+        val index = rowIndex[flash] ?: return@LaunchedEffect
+        state.animateScrollToItem(index)
+        delay(2_000)
+        onFlashShown()
+    }
+
+    ListScreen(
+        state = state,
+        edgeButton = {
+            EdgeButton(onClick = { saving = true }, buttonSize = EdgeButtonSize.Medium, colors = Buttons.primary()) {
+                Text("Done")
+            }
+        },
+    ) {
         item {
             Button(
                 onClick = { rename("Workout name") },
@@ -123,7 +155,7 @@ fun EditorScreen(id: String, open: (String) -> Unit, back: () -> Unit) {
         }
         w.blocks.forEachIndexed { i, block ->
             when (block) {
-                is Step -> item { StepRow(block, goal) { open(Routes.step(id, i, -1)) } }
+                is Step -> item { StepRow(block, goal, flash = flash == flashKey(i)) { open(Routes.step(id, i, -1)) } }
                 is Repeat, is RepeatUntilDistance -> {
                     item {
                         Button(
@@ -135,11 +167,11 @@ fun EditorScreen(id: String, open: (String) -> Unit, back: () -> Unit) {
                                     maxLines = 1,
                                 )
                             },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().flash(flash == flashKey(i)),
                         )
                     }
                     Edit.innerSteps(block).orEmpty().forEachIndexed { j, step ->
-                        item { StepRow(step, goal, indent = true) { open(Routes.step(id, i, j)) } }
+                        item { StepRow(step, goal, indent = true, flash = flash == flashKey(i, j)) { open(Routes.step(id, i, j)) } }
                     }
                 }
             }
@@ -148,7 +180,7 @@ fun EditorScreen(id: String, open: (String) -> Unit, back: () -> Unit) {
             FilledTonalButton(
                 onClick = {
                     edit { Edit.add(it, Edit.newStep()) }
-                    open(Routes.step(id, w.blocks.size, -1))
+                    open(Routes.step(id, w.blocks.size, -1, isNew = true))
                 },
                 label = { Text("+ Step") },
                 modifier = Modifier.fillMaxWidth(),
@@ -158,7 +190,7 @@ fun EditorScreen(id: String, open: (String) -> Unit, back: () -> Unit) {
             FilledTonalButton(
                 onClick = {
                     edit { Edit.add(it, Edit.newRepeat()) }
-                    open(Routes.block(id, w.blocks.size))
+                    open(Routes.block(id, w.blocks.size, isNew = true))
                 },
                 label = { Text("+ Repeat") },
                 secondaryLabel = { Text("N rounds of steps") },
@@ -169,15 +201,19 @@ fun EditorScreen(id: String, open: (String) -> Unit, back: () -> Unit) {
             FilledTonalButton(
                 onClick = {
                     edit { Edit.add(it, Edit.newRepeatUntil()) }
-                    open(Routes.block(id, w.blocks.size))
+                    open(Routes.block(id, w.blocks.size, isNew = true))
                 },
                 label = { Text("+ Repeat to distance") },
                 secondaryLabel = { Text("Cycle steps until X km") },
                 modifier = Modifier.fillMaxWidth(),
             )
         }
-        item {
-            Button(onClick = back, label = { Text("Done", Modifier.fillMaxWidth(), textAlign = TextAlign.Center) }, modifier = Modifier.fillMaxWidth())
+    }
+    var left by remember { mutableStateOf(false) }
+    DoneConfirmation(saving, "Workout saved") {
+        if (!left) {
+            left = true
+            back()
         }
     }
 }
@@ -186,8 +222,15 @@ private enum class StepDialog { NONE, TYPE, TIME, DISTANCE, FAST, SLOW, OFFSET }
 
 /** Edit one step: effort, how it ends, pace target, name, order. */
 @Composable
-fun StepScreen(id: String, path: StepPath, back: () -> Unit) {
+fun StepScreen(id: String, path: StepPath, isNew: Boolean, finish: (String) -> Unit, back: () -> Unit) {
     val (saved, edit) = rememberWorkout(id)
+    val store = LibraryStore.get(LocalContext.current)
+    val guard: DraftGuard = viewModel()
+    if (isNew) {
+        guard.discard = { store.update { lib -> lib.workout(id)?.let { lib.upsert(it.copy(workout = Edit.removeStep(it.workout, path))) } ?: lib } }
+    }
+    var confirming by remember { mutableStateOf(false) }
+    var left by remember { mutableStateOf(false) }
     val goal = goalPace()
     val step = saved?.let { Edit.stepAt(it.workout, path) }
     if (step == null) {
@@ -200,7 +243,18 @@ fun StepScreen(id: String, path: StepPath, back: () -> Unit) {
     val range = step.target as? PaceTarget.Range
     val goalTarget = step.target as? PaceTarget.Goal
 
-    ListScreen {
+    ListScreen(
+        edgeButton = {
+            EdgeButton(
+                onClick = {
+                    guard.confirmed = true
+                    confirming = true
+                },
+                buttonSize = EdgeButtonSize.Medium,
+                colors = Buttons.primary(),
+            ) { Text(if (isNew) "Add step" else "Save") }
+        },
+    ) {
         item {
             AnimatedContent(
                 targetState = step.type,
@@ -213,6 +267,7 @@ fun StepScreen(id: String, path: StepPath, back: () -> Unit) {
                 }
             }
         }
+        if (isNew) paragraph("Set it up, then scroll down and tap Add step.")
         item {
             FilledTonalButton(
                 onClick = { dialog = StepDialog.TYPE },
@@ -292,20 +347,34 @@ fun StepScreen(id: String, path: StepPath, back: () -> Unit) {
                 FilledTonalButton(onClick = { set(step.copy(name = null)) }, label = { Text("Reset name") }, modifier = Modifier.fillMaxWidth())
             }
         }
-        item {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp, androidx.compose.ui.Alignment.CenterHorizontally)) {
-                CompactButton(onClick = { edit { Edit.moveStep(it, path, -1) }; back() }, label = { Text("Up") })
-                CompactButton(onClick = { edit { Edit.moveStep(it, path, 1) }; back() }, label = { Text("Down") })
-                CompactButton(onClick = { edit { Edit.duplicateStep(it, path) }; back() }, label = { Text("Copy") })
+        if (isNew) {
+            item {
+                FilledTonalButton(onClick = back, label = { Text("Cancel") }, secondaryLabel = { Text("Don't add this step") }, modifier = Modifier.fillMaxWidth())
+            }
+        } else {
+            header("Arrange")
+            item {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp, androidx.compose.ui.Alignment.CenterHorizontally)) {
+                    CompactButton(onClick = { edit { Edit.moveStep(it, path, -1) }; back() }, label = { Text("Up") })
+                    CompactButton(onClick = { edit { Edit.moveStep(it, path, 1) }; back() }, label = { Text("Down") })
+                    CompactButton(onClick = { edit { Edit.duplicateStep(it, path) }; back() }, label = { Text("Copy") })
+                }
+            }
+            item {
+                Button(
+                    onClick = { edit { Edit.removeStep(it, path) }; back() },
+                    colors = Buttons.destructive(false),
+                    label = { Text("Delete step") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
-        item {
-            Button(
-                onClick = { edit { Edit.removeStep(it, path) }; back() },
-                colors = Buttons.destructive(false),
-                label = { Text("Delete step") },
-                modifier = Modifier.fillMaxWidth(),
-            )
+    }
+
+    DoneConfirmation(confirming, if (isNew) "Added to workout" else "Saved") {
+        if (!left) {
+            left = true
+            finish(flashKey(path.block, path.inner))
         }
     }
 
@@ -367,8 +436,30 @@ private enum class BlockDialog { NONE, ROUNDS, DISTANCE }
 
 /** Edit a repeat block: rounds or target distance, its steps, order. */
 @Composable
-fun BlockScreen(id: String, index: Int, open: (String) -> Unit, back: () -> Unit) {
+fun BlockScreen(
+    id: String,
+    index: Int,
+    isNew: Boolean,
+    open: (String) -> Unit,
+    finish: (String) -> Unit,
+    back: () -> Unit,
+    flash: String = "",
+    onFlashShown: () -> Unit = {},
+) {
     val (saved, edit) = rememberWorkout(id)
+    val store = LibraryStore.get(LocalContext.current)
+    val guard: DraftGuard = viewModel()
+    if (isNew) {
+        guard.discard = { store.update { lib -> lib.workout(id)?.let { lib.upsert(it.copy(workout = Edit.remove(it.workout, index))) } ?: lib } }
+    }
+    var confirming by remember { mutableStateOf(false) }
+    var left by remember { mutableStateOf(false) }
+    LaunchedEffect(flash) {
+        if (flash.isNotEmpty()) {
+            delay(2_000)
+            onFlashShown()
+        }
+    }
     val goal = goalPace()
     val block = saved?.workout?.blocks?.getOrNull(index)
     if (block == null || block is Step) {
@@ -378,8 +469,20 @@ fun BlockScreen(id: String, index: Int, open: (String) -> Unit, back: () -> Unit
     var dialog by remember { mutableStateOf(BlockDialog.NONE) }
     fun set(b: Block) = edit { Edit.replace(it, index, b) }
 
-    ListScreen {
+    ListScreen(
+        edgeButton = {
+            EdgeButton(
+                onClick = {
+                    guard.confirmed = true
+                    confirming = true
+                },
+                buttonSize = EdgeButtonSize.Medium,
+                colors = Buttons.primary(),
+            ) { Text(if (isNew) "Add repeat" else "Save") }
+        },
+    ) {
         item { Text(blockTitle(block), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary) }
+        if (isNew) paragraph("Set rounds and steps, then scroll down and tap Add repeat.")
         when (block) {
             is Repeat -> {
                 item {
@@ -420,7 +523,7 @@ fun BlockScreen(id: String, index: Int, open: (String) -> Unit, back: () -> Unit
                     icon = { TypeDot(step.type) },
                     label = { Text(step.label) },
                     secondaryLabel = { Text(stepDetail(step, goal), maxLines = 1) },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().flash(flash == flashKey(index, j)),
                 )
             }
         }
@@ -429,27 +532,41 @@ fun BlockScreen(id: String, index: Int, open: (String) -> Unit, back: () -> Unit
                 onClick = {
                     val count = Edit.innerSteps(block).orEmpty().size
                     edit { Edit.addInner(it, index, Edit.newStep(StepType.WALK)) }
-                    open(Routes.step(id, index, count))
+                    open(Routes.step(id, index, count, isNew = true))
                 },
                 label = { Text("+ Step in repeat") },
                 modifier = Modifier.fillMaxWidth(),
             )
         }
-        item {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp, androidx.compose.ui.Alignment.CenterHorizontally)) {
-                CompactButton(onClick = { edit { Edit.move(it, index, -1) }; back() }, label = { Text("Up") })
-                CompactButton(onClick = { edit { Edit.move(it, index, 1) }; back() }, label = { Text("Down") })
-                CompactButton(onClick = { edit { Edit.duplicate(it, index) }; back() }, label = { Text("Copy") })
+        if (isNew) {
+            item {
+                FilledTonalButton(onClick = back, label = { Text("Cancel") }, secondaryLabel = { Text("Don't add this repeat") }, modifier = Modifier.fillMaxWidth())
+            }
+        } else {
+            header("Arrange")
+            item {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp, androidx.compose.ui.Alignment.CenterHorizontally)) {
+                    CompactButton(onClick = { edit { Edit.move(it, index, -1) }; back() }, label = { Text("Up") })
+                    CompactButton(onClick = { edit { Edit.move(it, index, 1) }; back() }, label = { Text("Down") })
+                    CompactButton(onClick = { edit { Edit.duplicate(it, index) }; back() }, label = { Text("Copy") })
+                }
+            }
+            item {
+                Button(
+                    onClick = { edit { Edit.remove(it, index) }; back() },
+                    colors = Buttons.destructive(false),
+                    label = { Text("Delete repeat") },
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 14.dp),
+                )
             }
         }
-        item {
-            Button(
-                onClick = { edit { Edit.remove(it, index) }; back() },
-                colors = Buttons.destructive(false),
-                label = { Text("Delete repeat") },
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(horizontal = 14.dp),
-            )
+    }
+
+    DoneConfirmation(confirming, if (isNew) "Added to workout" else "Saved") {
+        if (!left) {
+            left = true
+            finish(flashKey(index))
         }
     }
 

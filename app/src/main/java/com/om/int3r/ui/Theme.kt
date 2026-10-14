@@ -1,5 +1,7 @@
 package com.om.int3r.ui
 
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -127,9 +129,10 @@ fun Int3rTheme(content: @Composable () -> Unit) = MaterialTheme(colorScheme = co
 @Composable
 fun ListScreen(
     state: ScalingLazyListState = rememberScalingLazyListState(),
+    edgeButton: (@Composable BoxScope.() -> Unit)? = null,
     content: ScalingLazyListScope.() -> Unit,
 ) {
-    ScreenScaffold(scrollState = state) { padding ->
+    val body: @Composable BoxScope.(PaddingValues) -> Unit = { padding ->
         ScalingLazyColumn(
             state = state,
             contentPadding = padding,
@@ -137,6 +140,8 @@ fun ListScreen(
             content = content,
         )
     }
+    if (edgeButton != null) ScreenScaffold(scrollState = state, edgeButton = edgeButton, content = body)
+    else ScreenScaffold(scrollState = state, content = body)
 }
 
 fun ScalingLazyListScope.header(text: String) = item {

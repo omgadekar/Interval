@@ -37,8 +37,8 @@ object Routes {
     const val NEW = "new/{date}"
     const val WORKOUT = "workout/{id}/{date}"
     const val EDIT = "edit/{id}"
-    const val STEP = "step/{id}/{block}/{inner}"
-    const val BLOCK = "block/{id}/{block}"
+    const val STEP = "step/{id}/{block}/{inner}/{mode}"
+    const val BLOCK = "block/{id}/{block}/{mode}"
     const val SCHEDULE = "schedule/{id}"
     const val PRERUN = "prerun/{id}/{date}"
     const val SUMMARY = "summary/{id}"
@@ -51,13 +51,16 @@ object Routes {
     fun newWorkout(date: LocalDate?) = "new/${d(date)}"
     fun workout(id: String, date: LocalDate? = null) = "workout/$id/${d(date)}"
     fun edit(id: String) = "edit/$id"
-    fun step(id: String, block: Int, inner: Int) = "step/$id/$block/$inner"
-    fun block(id: String, block: Int) = "block/$id/$block"
+    /** [isNew]: the step was just added and is only kept if you tap Add. */
+    fun step(id: String, block: Int, inner: Int, isNew: Boolean = false) = "step/$id/$block/$inner/${if (isNew) "new" else "edit"}"
+    fun block(id: String, block: Int, isNew: Boolean = false) = "block/$id/$block/${if (isNew) "new" else "edit"}"
     fun schedule(id: String) = "schedule/$id"
     fun prerun(id: String, date: LocalDate?) = "prerun/$id/${d(date)}"
     fun summary(id: String) = "summary/$id"
     fun export(id: String) = "export/$id"
 }
+
+private const val FLASH = "flash"
 
 private fun NavBackStackEntry.arg(name: String): String = arguments?.getString(name).orEmpty()
 
@@ -70,6 +73,11 @@ fun Int3rApp(ambient: Boolean, permissionsGranted: Boolean, onRequestPermissions
     val nav = rememberSwipeDismissableNavController()
     val open: (String) -> Unit = { nav.navigate(it) }
     val back: () -> Unit = { nav.popBackStack() }
+    // Close an editor and tell the screen underneath which row to highlight.
+    val finish: (String) -> Unit = { key ->
+        nav.previousBackStackEntry?.savedStateHandle?.set(FLASH, key)
+        nav.popBackStack()
+    }
 
     // A finished run lands on its summary, then the session goes back to idle.
     LaunchedEffect(run.phase, run.summaryId) {
@@ -102,15 +110,32 @@ fun Int3rApp(ambient: Boolean, permissionsGranted: Boolean, onRequestPermissions
                         }
                     }
                     composable(Routes.WORKOUT) { e -> WorkoutScreen(e.arg("id"), e.date(), open, back) }
-                    composable(Routes.EDIT) { e -> EditorScreen(e.arg("id"), open, back) }
+                    composable(Routes.EDIT) { e ->
+                        val flash by e.savedStateHandle.getStateFlow(FLASH, "").collectAsStateWithLifecycle()
+                        EditorScreen(e.arg("id"), open, back, flash) { e.savedStateHandle[FLASH] = "" }
+                    }
                     composable(Routes.STEP) { e ->
                         StepScreen(
                             e.arg("id"),
                             StepPath(e.arg("block").toIntOrNull() ?: 0, e.arg("inner").toIntOrNull() ?: -1),
-                            back,
+                            isNew = e.arg("mode") == "new",
+                            finish = finish,
+                            back = back,
                         )
                     }
-                    composable(Routes.BLOCK) { e -> BlockScreen(e.arg("id"), e.arg("block").toIntOrNull() ?: 0, open, back) }
+                    composable(Routes.BLOCK) { e ->
+                        val flash by e.savedStateHandle.getStateFlow(FLASH, "").collectAsStateWithLifecycle()
+                        BlockScreen(
+                            e.arg("id"),
+                            e.arg("block").toIntOrNull() ?: 0,
+                            isNew = e.arg("mode") == "new",
+                            open = open,
+                            finish = finish,
+                            back = back,
+                            flash = flash,
+                            onFlashShown = { e.savedStateHandle[FLASH] = "" },
+                        )
+                    }
                     composable(Routes.SCHEDULE) { e -> ScheduleScreen(e.arg("id"), back) }
                     composable(Routes.PRERUN) { e -> PreRunScreen(e.arg("id"), e.date(), run, permissionsGranted, onRequestPermissions) }
                     composable(Routes.SUMMARY) { e -> SummaryScreen(e.arg("id"), open, back) }
