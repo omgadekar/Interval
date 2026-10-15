@@ -12,9 +12,14 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -82,7 +87,8 @@ fun rememberCountUp(target: Float, durationMs: Int = 900): Float {
 }
 /**
  * One line of text that shrinks (down to [minSize]) rather than truncating, for the narrow
- * top and bottom lines of a round screen.
+ * top and bottom lines of a round screen. It only shrinks when the text is wider than its space,
+ * never for height, and stays invisible until it fits so you never see it resize.
  */
 @Composable
 fun FitText(
@@ -92,12 +98,22 @@ fun FitText(
     modifier: Modifier = Modifier,
     minSize: androidx.compose.ui.unit.TextUnit = 10.sp,
 ) {
-    androidx.compose.foundation.text.BasicText(
-        text = text,
-        modifier = modifier,
-        style = style.copy(color = color, textAlign = androidx.compose.ui.text.style.TextAlign.Center),
+    var size by remember(text, style) { mutableStateOf(style.fontSize) }
+    var fits by remember(text, style) { mutableStateOf(false) }
+    Text(
+        text,
+        modifier = modifier.drawWithContent { if (fits) drawContent() },
+        style = style.copy(fontSize = size),
+        color = color,
         maxLines = 1,
-        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-        autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = minSize, maxFontSize = style.fontSize, stepSize = 0.5.sp),
+        softWrap = false,
+        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        onTextLayout = { layout ->
+            if (layout.didOverflowWidth && size.value > minSize.value) {
+                size = (size.value - 0.5f).sp
+            } else {
+                fits = true
+            }
+        },
     )
 }

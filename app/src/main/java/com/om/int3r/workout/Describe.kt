@@ -38,7 +38,14 @@ object Describe {
     fun summary(workout: Workout, goalSecPerKm: Int?): String {
         if (workout.blocks.isEmpty()) return "Empty"
         val minutes = Math.round(Timeline.totalSeconds(workout, goalSecPerKm) / 60.0)
-        val main = workout.blocks.firstOrNull { it !is Step || it.type != StepType.WALK } ?: workout.blocks.first()
+        // Describe the hardest part (the reps, the tempo), not the warm-up.
+        val main = workout.blocks.maxByOrNull { block ->
+            when (block) {
+                is Step -> block.type.intensity
+                is Repeat -> block.steps.maxOf { it.type.intensity } + 0.01f
+                is RepeatUntilDistance -> block.steps.maxOf { it.type.intensity } + 0.01f
+            }
+        } ?: workout.blocks.first()
         return "≈ $minutes min · ${block(main, goalSecPerKm)}"
     }
 }

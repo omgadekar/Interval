@@ -267,7 +267,8 @@ private fun SegmentPage(run: RunUiState) {
     // Galaxy Watch 4 40 mm is about 198 dp across; give the big countdown a smaller face there.
     val compact = LocalConfiguration.current.screenWidthDp < 215
     RoundColumn(Modifier.fillMaxSize(), spacing = 0.dp, edgeInset = 16.dp) {
-        Centered { AnimatedContent(
+        // An explicit height: the animation wrapper reports no height to RoundColumn on its own.
+        Box(Modifier.fillMaxWidth().height(if (compact) 22.dp else 26.dp), contentAlignment = Alignment.Center) { AnimatedContent(
             targetState = if (run.workoutComplete) "Workout complete" else run.segmentLabel ?: "",
             transitionSpec = {
                 (slideInVertically(tween(350)) { it } + fadeIn(tween(350)) + scaleIn(initialScale = 0.9f))
