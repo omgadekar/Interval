@@ -33,12 +33,11 @@ INT3R is a Wear OS running app for the Galaxy Watch 4. You build interval workou
   | Too fast | 4 quick taps |
   | Too slow | 2 medium |
   | Workout complete | 1 very long |
-- Swipe between five pages:
+- Swipe between four pages:
   - **Controls** (one swipe right, as on Apple Watch): pause or resume, skip, end.
   - **Workout:** the current step.
   - **Live:** heart rate, pace and cadence graphs that glide along in real time.
   - **Totals:** time, distance, average pace, altitude, climb, cadence, calories.
-  - **Music:** play/pause, next, previous and volume for your phone's music. Turn the bezel to change the volume.
 - **Back** during a run goes to the watch face and keeps recording. Tap the workout chip to return.
 
 **After the run**
@@ -105,14 +104,6 @@ On a run's summary, tap **Export**:
 
 Sharing stops when you leave the screen or after 10 minutes. The link contains a random code, so nobody else on the network can guess it.
 
-## Song names on the Music page
-
-The Music page controls your phone's player straight away. To also show the song and artist, the app needs notification access. Watches often have no settings screen for this, so grant it once from the PC with the watch connected:
-
-```
-adb shell cmd notification allow_listener com.om.int3r/com.om.int3r.music.MediaListener
-```
-
 ## Getting runs off the watch over ADB
 
 Every run is saved to `/sdcard/Android/data/com.om.int3r/files/runs/` as four files:
@@ -163,7 +154,6 @@ adb shell am broadcast -a whs.synthetic.user.START_RUNNING com.google.android.we
 | `record/` | Track building, summaries, graph series, TCX/GPX writers |
 | `data/` | Library, settings and run storage on the watch |
 | `ui/` | Wear Compose screens, charts, pickers, motion, Inter typography |
-| `music/` | Media controls for the Music page |
 | `export/` | Wi-Fi link and the small web server behind Export |
 | `tile/` | The Today tile |
 
@@ -172,7 +162,6 @@ adb shell am broadcast -a whs.synthetic.user.START_RUNNING com.google.android.we
 - **Pace alerts can lag with the screen off.** Health Services sends sensor data in batches then, so an alert can arrive a few seconds late. Interval timing is not affected: it runs off the watch's own clock.
 - **Distance-based steps can end a little late with the screen off.** They end on live distance, so the cue can come up to one batch late. Lap distances in the saved files are corrected from the timestamped distance stream.
 - **Export needs Wi-Fi.** It uses the watch's Wi-Fi, not Bluetooth, so the phone and watch must share a network. It has been tested with simulated requests, but not yet with a real phone.
-- **Music controls are untested with a real phone.** They use standard media buttons and should work with your phone's player as the watch mirrors it, but the emulator has no phone attached.
 - **A crash loses the run summary.** If the app is killed mid-run, the summary isn't written, but the raw `.csv` up to that point is kept.
 ## Credits
 
