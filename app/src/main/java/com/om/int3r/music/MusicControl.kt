@@ -10,6 +10,7 @@ import android.media.session.PlaybackState
 import android.os.Handler
 import android.os.Looper
 import android.view.KeyEvent
+import androidx.core.app.NotificationManagerCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -56,6 +57,12 @@ class MusicControl(private val context: Context) {
         } catch (_: SecurityException) {
             _state.value = NowPlaying(canSeeTrack = false, volume = streamVolume())
         }
+    }
+
+    companion object {
+        /** True once notification access is granted, so the song and artist can be read. */
+        fun hasSongAccess(context: Context): Boolean =
+            NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
     }
 
     fun stop() {

@@ -1,5 +1,6 @@
 package com.om.int3r.ui
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -140,6 +141,8 @@ fun ListScreen(
             // Wear lists centre their second item by default, which leaves a gap above the title.
             // Start at the top like a normal page.
             autoCentering = null,
+            // A little more room between buttons than the Wear default (4 dp).
+            verticalArrangement = Arrangement.spacedBy(8.dp),
             content = content,
         )
     }

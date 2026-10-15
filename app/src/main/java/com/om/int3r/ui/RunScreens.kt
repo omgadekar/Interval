@@ -66,6 +66,7 @@ import com.om.int3r.exercise.PaceStatus
 import com.om.int3r.exercise.Phase
 import com.om.int3r.exercise.RunSession
 import com.om.int3r.exercise.RunUiState
+import com.om.int3r.music.MusicControl
 import com.om.int3r.workout.Describe
 import com.om.int3r.workout.Edit
 import com.om.int3r.workout.PaceTarget
@@ -152,7 +153,11 @@ fun PreRunScreen(workoutId: String, date: LocalDate?, run: RunUiState, permissio
 fun RunScreen(run: RunUiState, ambient: Boolean) {
     // Created before the ambient switch so the page you were on survives the screen going dark.
     // Controls sit one swipe to the right of the workout, as on Apple Watch.
-    val pager = rememberPagerState(initialPage = 1, pageCount = { 5 })
+    // The Music page only appears when INT3R may read what's playing (notification access);
+    // controls without the song would be half a feature, so it stays out of the way until then.
+    val context = LocalContext.current
+    val showMusic = remember { MusicControl.hasSongAccess(context) }
+    val pager = rememberPagerState(initialPage = 1, pageCount = { if (showMusic) 5 else 4 })
     if (ambient) {
         AmbientRun(run)
         return
@@ -204,7 +209,7 @@ fun RunScreen(run: RunUiState, ambient: Boolean) {
                 1 -> SegmentPage(run)
                 2 -> LivePage(run)
                 3 -> TotalsPage(run)
-                else -> MusicPage(isCurrent = pager.currentPage == 4)
+                else -> if (showMusic) MusicPage(isCurrent = pager.currentPage == 4)
             }
         }
         HorizontalPageIndicator(pagerState = pager, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp))
