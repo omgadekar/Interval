@@ -12,6 +12,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.wear.compose.material3.ConfirmationDialog
 import androidx.wear.compose.material3.ConfirmationDialogDefaults
 import androidx.wear.compose.material3.SuccessConfirmationDialog
 import androidx.wear.compose.material3.confirmationDialogCurvedText
@@ -70,4 +79,39 @@ fun DoneConfirmation(visible: Boolean, text: String, onDone: () -> Unit) {
         curvedText = { confirmationDialogCurvedText(text, style) },
         durationMillis = 1200,
     )
+}
+/** A bin, drawn so it matches the confirmation check mark. */
+@Composable
+private fun BinIcon(color: Color) {
+    Canvas(Modifier.size(46.dp)) {
+        val w = size.width
+        val h = size.height
+        val s = Stroke(w * 0.08f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        drawLine(color, Offset(w * 0.18f, h * 0.24f), Offset(w * 0.82f, h * 0.24f), strokeWidth = w * 0.08f, cap = StrokeCap.Round)
+        drawLine(color, Offset(w * 0.4f, h * 0.12f), Offset(w * 0.6f, h * 0.12f), strokeWidth = w * 0.08f, cap = StrokeCap.Round)
+        val body = Path().apply {
+            moveTo(w * 0.26f, h * 0.32f)
+            lineTo(w * 0.32f, h * 0.88f)
+            lineTo(w * 0.68f, h * 0.88f)
+            lineTo(w * 0.74f, h * 0.32f)
+        }
+        drawPath(body, color, style = s)
+        drawLine(color, Offset(w * 0.44f, h * 0.42f), Offset(w * 0.46f, h * 0.76f), strokeWidth = w * 0.06f, cap = StrokeCap.Round)
+        drawLine(color, Offset(w * 0.56f, h * 0.42f), Offset(w * 0.54f, h * 0.76f), strokeWidth = w * 0.06f, cap = StrokeCap.Round)
+    }
+}
+
+/** The delete counterpart of [DoneConfirmation]: a red bin and curved text, then [onDone]. */
+@Composable
+fun DeletedConfirmation(visible: Boolean, text: String = "Deleted", onDone: () -> Unit) {
+    val style = ConfirmationDialogDefaults.curvedTextStyle
+    ConfirmationDialog(
+        visible = visible,
+        onDismissRequest = onDone,
+        curvedText = { confirmationDialogCurvedText(text, style) },
+        colors = ConfirmationDialogDefaults.colors(iconColor = Color.White, iconContainerColor = Palette.Red, textColor = Color.White),
+        durationMillis = 1200,
+    ) {
+        BinIcon(Color.White)
+    }
 }

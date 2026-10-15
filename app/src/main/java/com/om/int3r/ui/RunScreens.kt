@@ -150,6 +150,9 @@ fun PreRunScreen(workoutId: String, date: LocalDate?, run: RunUiState, permissio
 
 @Composable
 fun RunScreen(run: RunUiState, ambient: Boolean) {
+    // Created before the ambient switch so the page you were on survives the screen going dark.
+    // Controls sit one swipe to the right of the workout, as on Apple Watch.
+    val pager = rememberPagerState(initialPage = 1, pageCount = { 5 })
     if (ambient) {
         AmbientRun(run)
         return
@@ -176,8 +179,6 @@ fun RunScreen(run: RunUiState, ambient: Boolean) {
         tween(600),
         label = "ring",
     )
-    // Controls sit one swipe to the right of the workout, as on Apple Watch.
-    val pager = rememberPagerState(initialPage = 1, pageCount = { 5 })
     Box(
         Modifier
             .fillMaxSize()
@@ -233,11 +234,11 @@ private fun LivePage(run: RunUiState) {
     // Each line is sized to the width the round screen allows at its height, inside the ring.
     RoundColumn(Modifier.fillMaxSize(), spacing = if (small) 2.dp else 3.dp, edgeInset = 16.dp) {
         LiveHeader("HR", run.heartRate?.toString() ?: "--", "bpm", Palette.Heart)
-        LiveChart(run.hrTrail.map { it.toFloat() }, Palette.Heart, chartModifier, minSpan = 12f)
+        LiveChart(run.hrTrail, Palette.Heart, chartModifier, minSpan = 12f, quantum = 5f)
         LiveHeader("Pace", paceText(run.paceSecPerKm), "/km", Palette.PaceMetric)
-        LiveChart(run.paceTrail, Palette.PaceMetric, chartModifier, invert = true, minSpan = 30f)
+        LiveChart(run.paceTrail, Palette.PaceMetric, chartModifier, invert = true, minSpan = 30f, quantum = 15f)
         LiveHeader(if (small) "Cad" else "Cadence", run.cadence?.toString() ?: "--", "spm", Palette.Cadence)
-        LiveChart(run.cadenceTrail.map { it.toFloat() }, Palette.Cadence, chartModifier, minSpan = 10f)
+        LiveChart(run.cadenceTrail, Palette.Cadence, chartModifier, minSpan = 10f, quantum = 5f)
     }
 }
 
@@ -282,7 +283,7 @@ private fun SegmentPage(run: RunUiState) {
             run.workoutComplete -> "Keep moving or end"
             run.rounds == null && run.blockRemainingMeters != null -> "Round ${run.round} · ${formatDistance(run.blockRemainingMeters)} left"
             run.rounds != null && run.rounds > 1 -> "Round ${run.round} of ${run.rounds}"
-            run.totalSegments != null -> "Step ${run.segmentNumber} of ${run.totalSegments}"
+            run.totalSegments != null -> "Part ${run.segmentNumber} of ${run.totalSegments}"
             else -> ""
         }
         Centered { Text(roundText, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1) }
@@ -334,7 +335,8 @@ private fun TotalsPage(run: RunUiState) {
         Centered {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
                 Text("♥ ${run.heartRate ?: "--"} ", style = MaterialTheme.typography.labelMedium, color = Palette.Red)
-                if (run.hrTrail.size >= 2) Sparkline(run.hrTrail, Palette.Red, Modifier.width(64.dp).height(18.dp))
+                val hr = run.hrTrail.values.takeLast(60).filterNotNull().map { it.toInt() }
+                if (hr.size >= 2) Sparkline(hr, Palette.Red, Modifier.width(64.dp).height(18.dp))
             }
         }
         Centered {

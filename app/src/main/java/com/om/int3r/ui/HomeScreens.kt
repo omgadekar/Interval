@@ -226,6 +226,13 @@ fun DayScreen(date: LocalDate, open: (String) -> Unit) {
     val done by prefs.done.collectAsStateWithLifecycle()
     val settings by prefs.settings.collectAsStateWithLifecycle()
     val planned = library.scheduledOn(date)
+    var clearing by remember { mutableStateOf(false) }
+    DeletedConfirmation(clearing, "Removed from day") {
+        if (clearing) {
+            clearing = false
+            store.update { it.plan(date, null) }
+        }
+    }
 
     ListScreen {
         header(if (date == LocalDate.now()) "Today" else date.format(longDay))
@@ -253,7 +260,7 @@ fun DayScreen(date: LocalDate, open: (String) -> Unit) {
             }
             item {
                 FilledTonalButton(
-                    onClick = { store.update { it.plan(date, null) } },
+                    onClick = { clearing = true },
                     label = { Text("Make it a rest day") },
                     modifier = Modifier.fillMaxWidth(),
                 )

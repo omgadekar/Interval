@@ -160,6 +160,8 @@ fun SummaryScreen(id: String, open: (String) -> Unit, back: () -> Unit) {
         return
     }
     var confirmDelete by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf(false) }
+    var deleted by remember { mutableStateOf(false) }
     LaunchedEffect(confirmDelete) {
         if (confirmDelete) {
             delay(3_000)
@@ -250,18 +252,18 @@ fun SummaryScreen(id: String, open: (String) -> Unit, back: () -> Unit) {
         }
         item {
             Button(
-                onClick = {
-                    if (confirmDelete) {
-                        store.delete(id)
-                        back()
-                    } else {
-                        confirmDelete = true
-                    }
-                },
+                onClick = { if (confirmDelete) deleting = true else confirmDelete = true },
                 colors = Buttons.destructive(confirmDelete),
                 label = { Text(if (confirmDelete) "Tap again to delete" else "Delete run") },
                 modifier = Modifier.fillMaxWidth(),
             )
+        }
+    }
+    DeletedConfirmation(deleting, "Run deleted") {
+        if (!deleted) {
+            deleted = true
+            store.delete(id)
+            back()
         }
     }
 }

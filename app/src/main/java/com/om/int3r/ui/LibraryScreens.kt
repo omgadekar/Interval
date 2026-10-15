@@ -83,7 +83,7 @@ fun NewWorkoutScreen(date: LocalDate?, created: (String) -> Unit) {
     val store = LibraryStore.get(LocalContext.current)
     val settings by Prefs.get(LocalContext.current).settings.collectAsStateWithLifecycle()
     ListScreen {
-        header("Start from")
+        header("Pick a starting point")
         items(Templates.ALL.size) { i ->
             val (name, workout) = Templates.ALL[i]
             val preview = SavedWorkout("preview", name, workout)
@@ -102,13 +102,16 @@ fun WorkoutScreen(id: String, date: LocalDate?, open: (String) -> Unit, back: ()
     val store = LibraryStore.get(LocalContext.current)
     val library by store.library.collectAsStateWithLifecycle()
     val settings by Prefs.get(LocalContext.current).settings.collectAsStateWithLifecycle()
+    // Set once this screen deletes the workout itself, so the empty state doesn't navigate back twice.
+    var deleted by remember { mutableStateOf(false) }
     val w = library.workout(id)
     if (w == null) {
-        LaunchedEffect(Unit) { back() }
+        if (!deleted) LaunchedEffect(Unit) { back() }
         return
     }
     val goal = settings.goalSecPerKm
     var confirmDelete by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf(false) }
     LaunchedEffect(confirmDelete) {
         if (confirmDelete) {
             delay(3_000)
@@ -157,18 +160,18 @@ fun WorkoutScreen(id: String, date: LocalDate?, open: (String) -> Unit, back: ()
         }
         item {
             Button(
-                onClick = {
-                    if (confirmDelete) {
-                        store.update { it.delete(id) }
-                        back()
-                    } else {
-                        confirmDelete = true
-                    }
-                },
+                onClick = { if (confirmDelete) deleting = true else confirmDelete = true },
                 colors = Buttons.destructive(confirmDelete),
                 label = { Text(if (confirmDelete) "Tap again to delete" else "Delete") },
                 modifier = Modifier.fillMaxWidth(),
             )
+        }
+    }
+    DeletedConfirmation(deleting, "Workout deleted") {
+        if (!deleted) {
+            deleted = true
+            store.update { it.delete(id) }
+            back()
         }
     }
 }

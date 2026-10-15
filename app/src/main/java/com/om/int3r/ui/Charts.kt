@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -33,6 +35,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
+import com.om.int3r.record.Trail
 import com.om.int3r.workout.Timeline
 import com.om.int3r.workout.Workout
 
@@ -180,36 +183,35 @@ fun EdgeRing(progress: Float, segment: Int, color: Color, modifier: Modifier = M
     }
 }
 /**
- * A live graph that glides left as each new second arrives, like a heart monitor. The newest
- * point slides in from the right edge with a soft glow; the scale eases rather than jumping.
- * [window] is how many seconds are visible.
+ * A live graph that glides left at a steady speed, like a heart monitor. Position comes from each
+ * reading's own time and the screen's frame clock, so it never jumps when data arrives, and readings
+ * delivered late (screen was off) appear where they belong. The scale moves in whole [quantum] steps
+ * and eases, so it doesn't wobble.
  */
 @Composable
 fun LiveChart(
-    values: List<Float?>,
+    trail: Trail,
     color: Color,
     modifier: Modifier = Modifier,
     invert: Boolean = false,
-    window: Int = 90,
+    windowSec: Int = 60,
     minSpan: Float = 10f,
+    quantum: Float = 5f,
 ) {
-    val phase = remember { Animatable(1f) }
-    LaunchedEffect(values) {
-        phase.snapTo(0f)
-        phase.animateTo(1f, tween(980, easing = LinearEasing))
+    val now by produceState(System.currentTimeMillis()) {
+        while (true) withFrameMillis { value = System.currentTimeMillis() }
     }
-    // Early in a run there are only a few seconds of data: zoom in so the line spans the card,
-    // then ease out to the full window as the minutes add up.
-    val span = (values.size - 1).coerceIn(10, window)
-    val windowF by animateFloatAsState(span.toFloat(), tween(900), label = "window")
-    val visible = values.takeLast(span + 1)
-    val present = visible.filterNotNull()
+    val windowMs = windowSec * 1000L
+    // Newest second is still filling up; show it once it is complete, sliding in from the right edge.
+    val lagMs = 1500L
+    val inView = trail.values.indices.filter { i -> trail.values[i] != null && now - lagMs - trail.timeOf(i) <= windowMs + 2_000 }
+    val present = inView.map { trail.values[it]!! }
     val rawMin = present.minOrNull() ?: 0f
     val rawMax = present.maxOrNull() ?: 0f
     val mid = (rawMin + rawMax) / 2
-    val range0 = maxOf(rawMax - rawMin, minSpan)
-    val low by animateFloatAsState(mid - range0 / 2, tween(900), label = "low")
-    val high by animateFloatAsState(mid + range0 / 2, tween(900), label = "high")
+    val half = maxOf(rawMax - rawMin, minSpan) / 2
+    val low by animateFloatAsState(kotlin.math.floor((mid - half) / quantum) * quantum, tween(1200), label = "low")
+    val high by animateFloatAsState(kotlin.math.ceil((mid + half) / quantum) * quantum, tween(1200), label = "high")
     Canvas(modifier) {
         val stroke = 2.5.dp.toPx()
         val baseY = size.height - stroke
@@ -217,17 +219,15 @@ fun LiveChart(
             drawLine(color.copy(alpha = 0.25f), Offset(0f, size.height / 2), Offset(size.width, size.height / 2), strokeWidth = stroke, cap = StrokeCap.Round)
             return@Canvas
         }
-        val step = size.width / windowF
-        val n = visible.size
         val range = (high - low).coerceAtLeast(0.001f)
         val pad = size.height * 0.12f
-        val points = visible.mapIndexed { i, v ->
-            v?.let {
-                val norm = ((it - low) / range).coerceIn(0f, 1f)
-                val y = pad + (size.height - pad * 2) * (if (invert) norm else 1f - norm)
-                Offset(size.width - (n - 1 - i) * step + (1f - phase.value) * step, y)
-            }
+        fun x(t: Long) = size.width * (1f - (now - lagMs - t).toFloat() / windowMs)
+        fun y(v: Float): Float {
+            val norm = ((v - low) / range).coerceIn(0f, 1f)
+            return pad + (size.height - pad * 2) * (if (invert) norm else 1f - norm)
         }
+        val first = inView.first()
+        val points = (first..inView.last()).map { i -> trail.values[i]?.let { Offset(x(trail.timeOf(i)), y(it)) } }
         clipRect {
             var run = mutableListOf<Offset>()
             fun flush() {
@@ -245,10 +245,10 @@ fun LiveChart(
             flush()
             drawPath(smoothPath(points), color, style = Stroke(stroke, cap = StrokeCap.Round, join = StrokeJoin.Round))
         }
-        points.lastOrNull()?.let { p ->
-            val x = p.x.coerceAtMost(size.width - 4.dp.toPx())
-            drawCircle(color.copy(alpha = 0.25f), 6.dp.toPx(), Offset(x, p.y))
-            drawCircle(color, 3.dp.toPx(), Offset(x, p.y))
+        points.lastOrNull { it != null }?.let { p ->
+            val px = p.x.coerceAtMost(size.width - 4.dp.toPx())
+            drawCircle(color.copy(alpha = 0.25f), 6.dp.toPx(), Offset(px, p.y))
+            drawCircle(color, 3.dp.toPx(), Offset(px, p.y))
         }
     }
 }

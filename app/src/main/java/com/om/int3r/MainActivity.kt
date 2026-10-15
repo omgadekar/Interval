@@ -8,6 +8,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.content.ContextCompat
 import androidx.wear.ambient.AmbientLifecycleObserver
+import com.om.int3r.exercise.ExerciseService
+import com.om.int3r.exercise.RunSession
 import com.om.int3r.ui.Int3rApp
 
 class MainActivity : ComponentActivity() {
@@ -62,5 +64,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         refreshPermissions()
+        // Screen is back: have Health Services deliver what it held back, so graphs catch up at once.
+        if (RunSession.state.value.isRecording) ExerciseService.send(this, ExerciseService.ACTION_FLUSH)
     }
 }

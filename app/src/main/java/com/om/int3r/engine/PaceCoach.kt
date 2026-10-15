@@ -13,10 +13,14 @@ class SpeedSmoother(private val windowMs: Long = 30_000) {
 
     fun clear() = samples.clear()
 
-    /** Smoothed pace in s/km, or null when stopped or without data. */
-    fun paceSecPerKm(): Double? {
-        if (samples.isEmpty()) return null
-        val mean = samples.sumOf { it.second } / samples.size
+    /**
+     * Smoothed pace in s/km, or null when stopped or without data. With [nowMs], readings older than
+     * the window (held back while the screen was off) don't count, so a stale pace is never reported.
+     */
+    fun paceSecPerKm(nowMs: Long? = null): Double? {
+        val recent = if (nowMs == null) samples.toList() else samples.filter { it.first >= nowMs - windowMs }
+        if (recent.isEmpty()) return null
+        val mean = recent.sumOf { it.second } / recent.size
         return if (mean < MIN_MOVING_SPEED) null else 1000.0 / mean
     }
 

@@ -19,6 +19,7 @@ import androidx.health.services.client.ExerciseClient
 import androidx.health.services.client.ExerciseUpdateCallback
 import androidx.health.services.client.HealthServices
 import androidx.health.services.client.data.Availability
+import androidx.health.services.client.data.BatchingMode
 import androidx.health.services.client.data.DataType
 import androidx.health.services.client.data.DataTypeAvailability
 import androidx.health.services.client.data.DeltaDataType
@@ -50,6 +51,7 @@ import com.om.int3r.record.LapRecord
 import com.om.int3r.record.RunStreams
 import com.om.int3r.record.TcxWriter
 import com.om.int3r.record.TimedValue
+import com.om.int3r.record.Trails
 import com.om.int3r.record.Track
 import com.om.int3r.tile.TodayTileService
 import com.om.int3r.workout.End
@@ -91,6 +93,8 @@ class ExerciseService : LifecycleService() {
         const val ACTION_SKIP = "com.om.int3r.SKIP"
         const val ACTION_END = "com.om.int3r.END"
         const val ACTION_CANCEL = "com.om.int3r.CANCEL"
+        /** Screen woke up: ask Health Services to hand over readings it held back while it was off. */
+        const val ACTION_FLUSH = "com.om.int3r.FLUSH"
         const val EXTRA_WORKOUT = "workout"
         const val EXTRA_DATE = "date"
 
@@ -107,7 +111,8 @@ class ExerciseService : LifecycleService() {
             else context.startService(intent)
         }
 
-        private const val HR_TRAIL = 180
+        /** Seconds of history kept for the live graphs. */
+        private const val TRAIL_SECONDS = 120
 
         private val WANTED: List<DataType<*, *>> = listOf(
             DataType.HEART_RATE_BPM,
@@ -130,10 +135,9 @@ class ExerciseService : LifecycleService() {
 
     private var saved: SavedWorkout? = null
     private var plannedDate: String? = null
-    private val hrTrail = ArrayDeque<Int>()
-    private val paceTrail = ArrayDeque<Float?>()
-    private val cadenceTrail = ArrayDeque<Int>()
     private var capabilities: ExerciseTypeCapabilities? = null
+    private var batchingModes: Set<BatchingMode> = emptySet()
+    private var lastFlushAt = 0L
     private var ongoing: OngoingActivity? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var tickJob: Job? = null
@@ -164,11 +168,6 @@ class ExerciseService : LifecycleService() {
     private var lastSpeed = 0.0
     private var engineMeters = 0.0
 
-    private fun <T> ArrayDeque<T>.push(value: T) {
-        addLast(value)
-        while (size > HR_TRAIL) removeFirst()
-    }
-
     private val bootEpochMs: Long get() = System.currentTimeMillis() - SystemClock.elapsedRealtime()
 
     override fun onCreate() {
@@ -194,6 +193,7 @@ class ExerciseService : LifecycleService() {
             ACTION_SKIP -> skip()
             ACTION_END -> lifecycleScope.launch { end() }
             ACTION_CANCEL -> lifecycleScope.launch { cancel() }
+            ACTION_FLUSH -> if (state.value.isRecording) lifecycleScope.launch { runCatching { client.flushAsync().await() } }
             else -> if (state.value.phase == Phase.IDLE) stopSelf()
         }
         return START_NOT_STICKY
@@ -217,8 +217,10 @@ class ExerciseService : LifecycleService() {
         registerCallback()
         lifecycleScope.launch {
             try {
-                val caps = client.getCapabilitiesAsync().await().getExerciseTypeCapabilities(ExerciseType.RUNNING)
+                val all = client.getCapabilitiesAsync().await()
+                val caps = all.getExerciseTypeCapabilities(ExerciseType.RUNNING)
                 capabilities = caps
+                batchingModes = all.supportedBatchingModeOverrides
                 val warmUpTypes = setOf<DeltaDataType<*, *>>(DataType.HEART_RATE_BPM, DataType.LOCATION)
                     .filter { it in caps.supportedDataTypes && permitted(it) }
                     .toSet()
@@ -239,6 +241,8 @@ class ExerciseService : LifecycleService() {
             .setDataTypes(types)
             .setIsAutoPauseAndResumeEnabled(false)
             .setIsGpsEnabled(DataType.LOCATION in types)
+            // With the screen off, keep heart rate coming every 5 s instead of in long batches.
+            .setBatchingModeOverrides(batchingModes.filter { it == BatchingMode.HEART_RATE_5_SECONDS }.toSet())
             .build()
         try {
             client.startExerciseAsync(config).await()
@@ -254,9 +258,6 @@ class ExerciseService : LifecycleService() {
         streams = RunStreams()
         laps.clear()
         smoother.clear()
-        hrTrail.clear()
-        paceTrail.clear()
-        cadenceTrail.clear()
         finishedAtActiveMs = null
         lastVerdict = null
         activeAccumMs = 0
@@ -402,14 +403,32 @@ class ExerciseService : LifecycleService() {
 
         val seg = eng.current
         val band = seg?.step?.let(::coachedBand)
+        flushIfNeeded(seg?.step, eng.snapshot(now, meters).remainingMeters, band != null)
         // Skip coaching on a tick that already buzzed, so a pace alert never cancels a segment or warning cue.
         if (prefs.settings.value.paceAlerts && events.isEmpty()) {
-            coach.update(now, smoother.paceSecPerKm(), band)?.let {
+            // Stale readings (held back while the screen was off) never trigger an alert.
+            coach.update(now, smoother.paceSecPerKm(System.currentTimeMillis()), band)?.let {
                 cues.pace(it)
                 lastVerdict = it to now
             }
         }
         publish(now)
+    }
+
+    /**
+     * With the screen off Health Services holds readings back. Ask for them early when it matters:
+     * every 5 s near the end of a distance step (so its cue is on time), every 20 s while pace is coached.
+     */
+    private fun flushIfNeeded(step: Step?, remainingMeters: Double?, coached: Boolean) {
+        val nowMs = SystemClock.elapsedRealtime()
+        val interval = when {
+            step?.end is End.Distance && (remainingMeters ?: Double.MAX_VALUE) < 300 -> 5_000L
+            coached -> 20_000L
+            else -> return
+        }
+        if (nowMs - lastFlushAt < interval) return
+        lastFlushAt = nowMs
+        client.flushAsync()
     }
 
     /** No coaching on walks, recoveries or strides: only the steps that carry a pace target. */
@@ -500,12 +519,10 @@ class ExerciseService : LifecycleService() {
         val eng = engine ?: return
         val snap = eng.snapshot(nowMs, engineMeters)
         val seg = snap.segment
-        val pace = smoother.paceSecPerKm()
+        val pace = smoother.paceSecPerKm(System.currentTimeMillis())
         val meters = max(lastDistance, engineMeters)
         val band = seg?.step?.let(::coachedBand)
-        state.value.heartRate?.let { hrTrail.push(it) }
-        paceTrail.push(pace?.toFloat())
-        state.value.cadence?.let { cadenceTrail.push(it) }
+        val wall = System.currentTimeMillis()
         val progress = when (val end = seg?.step?.end) {
             is End.Time -> snap.elapsedInSegmentMs / (end.seconds * 1000f)
             is End.Distance -> 1f - ((snap.remainingMeters ?: end.meters) / end.meters).toFloat()
@@ -519,9 +536,13 @@ class ExerciseService : LifecycleService() {
                 pace > band.maxSecPerKm -> PaceStatus.SLOW
                 else -> PaceStatus.ON
             },
-            hrTrail = hrTrail.toList(),
-            paceTrail = paceTrail.toList(),
-            cadenceTrail = cadenceTrail.toList(),
+            // Graphs come from the timestamped readings, so a batch delivered after the screen
+            // was off fills in the right seconds instead of leaving a flat line.
+            hrTrail = Trails.build(streams.heartRate, wall, TRAIL_SECONDS, maxGapSeconds = 15),
+            paceTrail = Trails.build(streams.speed, wall, TRAIL_SECONDS, smoothSeconds = 5, maxGapSeconds = 8) { v ->
+                if (v >= SpeedSmoother.MIN_MOVING_SPEED) 1000 / v else null
+            },
+            cadenceTrail = Trails.build(streams.cadence, wall, TRAIL_SECONDS, smoothSeconds = 3, maxGapSeconds = 15),
             activeMs = nowMs,
             meters = meters,
             paceSecPerKm = pace,

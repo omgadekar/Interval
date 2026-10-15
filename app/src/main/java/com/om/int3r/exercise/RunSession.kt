@@ -1,6 +1,7 @@
 package com.om.int3r.exercise
 
 import com.om.int3r.engine.PaceCoach
+import com.om.int3r.record.Trail
 import com.om.int3r.workout.PaceBand
 import com.om.int3r.workout.StepType
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,11 +46,11 @@ data class RunUiState(
     /** 0..1 through the current segment. */
     val segmentProgress: Float = 0f,
     val paceStatus: PaceStatus = PaceStatus.NONE,
-    /** Heart rate once per second, most recent last. */
-    val hrTrail: List<Int> = emptyList(),
-    /** Smoothed pace (s/km) once per second; null while standing. */
-    val paceTrail: List<Float?> = emptyList(),
-    val cadenceTrail: List<Int> = emptyList(),
+    /** Live graphs, one point per second built from timestamped readings. */
+    val hrTrail: Trail = Trail(),
+    /** Pace in s/km; null while standing. */
+    val paceTrail: Trail = Trail(),
+    val cadenceTrail: Trail = Trail(),
     val summaryId: String? = null,
     val error: String? = null,
 ) {
